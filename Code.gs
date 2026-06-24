@@ -41,25 +41,84 @@ var CONFIG = {
 // WEB APP ENTRY POINTS
 // ============================================================
 function doGet(e) {
-  var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';
+  var t0 = new Date().getTime();
+  // Logger.log lines show up in Apps Script -> Executions (works even
+  // when the browser tab never renders anything).
+  Logger.log('doGet ▶ start params=%s', JSON.stringify(e && e.parameter || {}));
 
-  if (page === 'manifest') {
-    return ContentService
-      .createTextOutput(getManifestJson())
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-  if (page === 'sw') {
-    return ContentService
-      .createTextOutput(getServiceWorkerJs())
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
+  try {
+    var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';
+    Logger.log('doGet route=%s', page);
 
-  var t = HtmlService.createTemplateFromFile('Index');
-  t.webAppUrl = ScriptApp.getService().getUrl();
-  return t.evaluate()
-    .setTitle('Resort Recruitment')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+    if (page === 'manifest') {
+      Logger.log('doGet -> manifest');
+      var mj = getManifestJson();
+      Logger.log('doGet manifest length=%s ms=%s', mj.length, new Date().getTime() - t0);
+      return ContentService
+        .createTextOutput(mj)
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    if (page === 'sw') {
+      Logger.log('doGet -> service worker');
+      var sw = getServiceWorkerJs();
+      Logger.log('doGet sw length=%s ms=%s', sw.length, new Date().getTime() - t0);
+      return ContentService
+        .createTextOutput(sw)
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+
+    Logger.log('doGet creating template "Index"');
+    var t;
+    try { t = HtmlService.createTemplateFromFile('Index'); }
+    catch (err) {
+      Logger.log('doGet TEMPLATE LOAD FAILED: %s', err && err.message);
+      throw err;
+    }
+
+    try { t.webAppUrl = ScriptApp.getService().getUrl(); }
+    catch (err) { Logger.log('doGet getUrl failed (non-fatal): %s', err && err.message); }
+
+    Logger.log('doGet evaluating template');
+    var output;
+    try { output = t.evaluate(); }
+    catch (err) {
+      Logger.log('doGet TEMPLATE EVAL FAILED: %s\nstack=%s', err && err.message, err && err.stack);
+      throw err;
+    }
+
+    output
+      .setTitle('Resort Recruitment')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
+
+    Logger.log('doGet ✔ served HTML in %sms', new Date().getTime() - t0);
+    // Mirror to the in-memory log buffer too so getServerLogs() shows it.
+    try { slog_('doGet', 'served', { ms: new Date().getTime() - t0, route: page }); } catch (e) {}
+    return output;
+
+  } catch (err) {
+    Logger.log('doGet ✖ FAILED: %s\nstack=%s', err && err.message, err && err.stack);
+    try { slog_('doGet', 'FAILED', { err: err && err.message }); } catch (e) {}
+
+    // Return a self-contained HTML error page so the browser sees SOMETHING
+    // useful instead of a blank tab or Apps Script's generic crash screen.
+    return HtmlService.createHtmlOutput(
+      '<!doctype html><html><body style="font-family:system-ui;padding:30px;color:#0f172a">' +
+      '<h2 style="color:#dc2626">Server error in doGet</h2>' +
+      '<p>' + (err && err.message ? escapeHtmlServer_(err.message) : 'Unknown error') + '</p>' +
+      '<p style="color:#64748b;font-size:.85rem">Open Apps Script → Executions to see the full trace. ' +
+      'Most common cause: required HTML file (Index / Manifest / ServiceWorker) missing or named differently.</p>' +
+      '<pre style="background:#f1f5f9;padding:12px;border-radius:6px;overflow:auto;font-size:.75rem">' +
+      escapeHtmlServer_((err && err.stack) || '') + '</pre>' +
+      '</body></html>'
+    );
+  }
+}
+
+function escapeHtmlServer_(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
 function include(filename) {
