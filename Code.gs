@@ -123,6 +123,47 @@ function nowIso_() {
 }
 
 // ============================================================
+// SERVER-SIDE LOG BUFFER
+// Persisted in ScriptProperties so the frontend can fetch the last
+// ~50 lines via getServerLogs(). Also writes to Logger so they appear
+// in the Apps Script Executions panel.
+// ============================================================
+var LOG_KEY_ = 'srv_log_v1';
+var LOG_MAX_ = 80;
+
+function slog_(tag, msg, obj) {
+  var ts = new Date().toISOString();
+  var line = ts + ' ' + tag + ' ' + msg;
+  if (obj !== undefined) {
+    try { line += ' ' + JSON.stringify(obj); }
+    catch (e) { line += ' [unserializable: ' + e.message + ']'; }
+  }
+  try { Logger.log(line); } catch (e) {}
+  try { console.log(line); } catch (e) {}
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var raw = props.getProperty(LOG_KEY_);
+    var arr = raw ? JSON.parse(raw) : [];
+    arr.push(line);
+    if (arr.length > LOG_MAX_) arr = arr.slice(-LOG_MAX_);
+    props.setProperty(LOG_KEY_, JSON.stringify(arr));
+  } catch (e) { /* don't let logging itself crash a call */ }
+}
+
+function getServerLogs() {
+  try {
+    var raw = PropertiesService.getScriptProperties().getProperty(LOG_KEY_);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return ['[log fetch error: ' + e.message + ']']; }
+}
+
+function clearServerLogs() {
+  try { PropertiesService.getScriptProperties().deleteProperty(LOG_KEY_); }
+  catch (e) {}
+  return 'ok';
+}
+
+// ============================================================
 // DIAGNOSTICS — run these from the Apps Script editor to verify
 // the backend is healthy without touching the web UI.
 // ============================================================
@@ -130,18 +171,22 @@ function nowIso_() {
 /** Quick smoke test. Run from editor → View → Logs. */
 function ping() {
   var t0 = new Date().getTime();
+  slog_('ping', 'start');
   var ss;
-  try { ss = getSpreadsheet_(); }
-  catch (e) { Logger.log('NO SPREADSHEET: ' + e.message); return 'NO SPREADSHEET'; }
+  try { ss = getSpreadsheet_(); slog_('ping', 'got spreadsheet', { name: ss.getName() }); }
+  catch (e) { slog_('ping', 'NO SPREADSHEET', { err: e.message }); return { ok:false, error: e.message }; }
 
   var email = '';
-  try { email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(); }
-  catch (e) { Logger.log('NO EMAIL: ' + e.message); }
+  try {
+    email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
+    slog_('ping', 'got email', { email: email });
+  } catch (e) { slog_('ping', 'NO EMAIL', { err: e.message }); }
 
   var sheetsOk = {};
   Object.keys(CONFIG.SHEETS).forEach(function(k){
     sheetsOk[k] = !!ss.getSheetByName(CONFIG.SHEETS[k]);
   });
+  slog_('ping', 'sheets check', sheetsOk);
 
   var out = {
     ok: true,
@@ -151,7 +196,7 @@ function ping() {
     spreadsheetName: ss.getName(),
     sheets: sheetsOk
   };
-  Logger.log(JSON.stringify(out, null, 2));
+  slog_('ping', 'done', { ms: out.elapsedMs });
   return out;
 }
 
@@ -337,31 +382,56 @@ function invalidateBootCache_() {
 }
 
 function bootstrapApp() {
+  var t0 = new Date().getTime();
+  slog_('bootstrap', 'start');
   try {
-    // Serve from cache when present — turns ~1–3s sheet reads into <100ms.
     var cache = getCache_();
-    var cached = cache.get(CONFIG.CACHE_KEY_BOOT);
+    var cached = null;
+    try { cached = cache.get(CONFIG.CACHE_KEY_BOOT); } catch (e) {
+      slog_('bootstrap', 'cache.get failed', { err: e.message });
+    }
     if (cached) {
+      slog_('bootstrap', 'cache HIT', { bytes: cached.length });
       try {
         var payload = JSON.parse(cached);
-        // Still re-check the user; permissions could have changed.
         payload.user = getCurrentUser();
-        if (!payload.user.authorized) return { user: payload.user };
+        if (!payload.user.authorized) {
+          slog_('bootstrap', 'cached but user no longer authorized');
+          return { user: payload.user };
+        }
         payload.cached = true;
+        slog_('bootstrap', 'done from cache', { ms: new Date().getTime() - t0 });
         return payload;
-      } catch (e) { /* fall through to fresh read */ }
+      } catch (e) {
+        slog_('bootstrap', 'cache parse failed, falling through', { err: e.message });
+      }
+    } else {
+      slog_('bootstrap', 'cache MISS');
     }
 
     var fresh = bootstrapAppImpl_();
     if (fresh && fresh.user && fresh.user.authorized) {
       try {
         var json = JSON.stringify(fresh);
-        // CacheService caps each value at 100 KB. Skip silently above that.
-        if (json.length < 95000) cache.put(CONFIG.CACHE_KEY_BOOT, json, CONFIG.CACHE_TTL_SECONDS);
-      } catch (e) {}
+        slog_('bootstrap', 'serialized', { bytes: json.length });
+        if (json.length < 95000) {
+          cache.put(CONFIG.CACHE_KEY_BOOT, json, CONFIG.CACHE_TTL_SECONDS);
+          slog_('bootstrap', 'cache stored');
+        } else {
+          slog_('bootstrap', 'payload too large for cache, skipped');
+        }
+      } catch (e) {
+        slog_('bootstrap', 'cache.put failed', { err: e.message });
+      }
     }
+    slog_('bootstrap', 'done fresh', {
+      ms: new Date().getTime() - t0,
+      candidates: fresh && fresh.candidates ? fresh.candidates.length : 0,
+      interviews: fresh && fresh.interviews ? fresh.interviews.length : 0
+    });
     return fresh;
   } catch (e) {
+    slog_('bootstrap', 'FATAL', { err: e.message, stack: e.stack });
     // Surface server-side errors as an authorized=false payload so the
     // frontend can render a useful message instead of going blank.
     return {
@@ -375,11 +445,18 @@ function bootstrapApp() {
 }
 
 function bootstrapAppImpl_() {
+  slog_('bootImpl', 'getCurrentUser');
   var user = getCurrentUser();
+  slog_('bootImpl', 'user', { authorized: user.authorized, role: user.role });
   if (!user.authorized) return { user: user };
 
+  slog_('bootImpl', 'reading Candidates sheet');
   var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
+  slog_('bootImpl', 'read Candidates', { rows: candidates.length });
+
+  slog_('bootImpl', 'reading Interviews sheet');
   var interviews = sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS));
+  slog_('bootImpl', 'read Interviews', { rows: interviews.length });
 
   // RBAC: Interviewers only see their assigned candidates / interviews.
   if (user.role === 'Interviewer') {
@@ -444,11 +521,19 @@ function bootstrapAppImpl_() {
 }
 
 function getCurrentUser() {
-  var email = Session.getActiveUser().getEmail();
-  if (!email) email = Session.getEffectiveUser().getEmail();
+  slog_('getCurrentUser', 'fetching email');
+  var email = '';
+  try { email = Session.getActiveUser().getEmail(); }
+  catch (e) { slog_('getCurrentUser', 'getActiveUser threw', { err: e.message }); }
+  if (!email) {
+    try { email = Session.getEffectiveUser().getEmail(); }
+    catch (e) { slog_('getCurrentUser', 'getEffectiveUser threw', { err: e.message }); }
+  }
+  slog_('getCurrentUser', 'email', { email: email });
   if (!email) return { authorized: false, message: 'Unable to detect Google account. Please sign in.' };
 
   var role = getUserRole(email);
+  slog_('getCurrentUser', 'role', { role: role });
   if (!role) {
     return { authorized: false, email: email, message: 'Access Denied. Your email is not registered. Contact admin.' };
   }

@@ -127,16 +127,23 @@
 <div id="loader" class="denied">
   <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
   <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v4</p>
+  <p class="text-muted small mt-2" style="font-size:.7rem">build v5</p>
   <pre id="debugPanel" style="
     margin-top: 16px; text-align:left; font-size:.7rem;
-    width: min(90vw, 480px); max-height: 40vh; overflow:auto;
-    background:#f8fafc; padding:10px; border-radius:8px;
-    border:1px solid #e5e7eb; color:#475569; white-space:pre-wrap;
-    line-height: 1.4;"></pre>
-  <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyDebug()">
-    <i class="bi bi-clipboard"></i> Copy debug log
-  </button>
+    width: min(90vw, 520px); max-height: 45vh; overflow:auto;
+    background:#0b1221; color:#cbd5e1; padding:10px; border-radius:8px;
+    border:1px solid #1e293b; white-space:pre-wrap; line-height: 1.4;"></pre>
+  <div class="d-flex gap-2 mt-2 flex-wrap" style="justify-content:center">
+    <button id="btnCopyDebug" type="button" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-clipboard"></i> Copy log
+    </button>
+    <button id="btnFetchServerLogs" type="button" class="btn btn-sm btn-outline-primary">
+      <i class="bi bi-cloud-download"></i> Show server logs
+    </button>
+    <button id="btnClearServerLogs" type="button" class="btn btn-sm btn-outline-danger">
+      <i class="bi bi-trash"></i> Clear server logs
+    </button>
+  </div>
 </div>
 
 <!-- LOGIN / ACCESS DENIED -->
@@ -289,32 +296,58 @@ const state = {
 // VISIBLE DEBUG LOG
 // ============================================================
 const debugLines = [];
-const t0 = Date.now();
+const tBoot = Date.now();
 function dlog(msg, obj) {
-  const t = ((Date.now() - t0) / 1000).toFixed(2);
-  const line = `[${t}s] ${msg}` + (obj !== undefined ? ' ' + safeJson(obj) : '');
+  const t = ((Date.now() - tBoot) / 1000).toFixed(2);
+  const line = `[${t}s] CLIENT ${msg}` + (obj !== undefined ? ' ' + safeJson(obj) : '');
   debugLines.push(line);
-  const el = document.getElementById('debugPanel');
-  if (el) el.textContent = debugLines.slice(-40).join('\n');
+  paintDebug();
   try { console.log(line); } catch (e) {}
+}
+function paintDebug() {
+  const el = document.getElementById('debugPanel');
+  if (el) el.textContent = debugLines.slice(-60).join('\n');
 }
 function safeJson(x) {
   try { return JSON.stringify(x); } catch (e) { return String(x); }
 }
-function copyDebug() {
+
+// Make sure copyDebug is always reachable from inline onclick (Apps Script
+// IFRAME sandbox sometimes evaluates onclick before the script body runs).
+window.copyDebug = function copyDebug() {
   const text = debugLines.join('\n');
-  if (navigator.clipboard) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(
-      () => toast('Debug log copied.'),
+      () => alert('Debug log copied to clipboard.'),
       () => fallbackCopy(text)
     );
   } else fallbackCopy(text);
-}
+};
+window.fetchServerLogs = async function fetchServerLogs() {
+  try {
+    const logs = await api('getServerLogs');
+    if (Array.isArray(logs)) {
+      // Merge server lines into the buffer (prefix SERVER, no timestamps replaced).
+      logs.forEach(l => debugLines.push('SERVER ' + l));
+      paintDebug();
+    }
+  } catch (e) {
+    dlog('fetchServerLogs failed', { msg: e.message });
+  }
+};
+window.clearServerLogsAndRefresh = async function() {
+  try { await api('clearServerLogs'); debugLines.length = 0; paintDebug(); }
+  catch (e) { dlog('clearServerLogs failed', { msg: e.message }); }
+};
+
 function fallbackCopy(text) {
   const ta = document.createElement('textarea');
-  ta.value = text; document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); toast('Debug log copied.'); }
-  catch (e) { toast('Copy failed.', 'danger'); }
+  ta.value = text;
+  ta.setAttribute('readonly', '');
+  ta.style.position = 'absolute'; ta.style.left = '-9999px';
+  document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); alert('Debug log copied.'); }
+  catch (e) { alert('Copy failed: ' + e.message); }
   finally { ta.remove(); }
 }
 
@@ -392,7 +425,17 @@ function showError(msg) {
   showOnly('gate');
 }
 
+function wireDebugButtons() {
+  const b1 = document.getElementById('btnCopyDebug');
+  const b2 = document.getElementById('btnFetchServerLogs');
+  const b3 = document.getElementById('btnClearServerLogs');
+  if (b1) b1.addEventListener('click', window.copyDebug);
+  if (b2) b2.addEventListener('click', window.fetchServerLogs);
+  if (b3) b3.addEventListener('click', window.clearServerLogsAndRefresh);
+}
+
 async function bootApp() {
+  wireDebugButtons();
   dlog('bootApp() start');
   showOnly('loader');
 
@@ -402,14 +445,14 @@ async function bootApp() {
   }
 
   // Step 1 — ping the bridge to prove the backend is reachable at all.
-  // This is a tiny call (no sheet reads) so it should return in < 500 ms.
   try {
     dlog('step 1/2: ping()');
     const pong = await withTimeout(api('ping'), 20000, 'ping');
     dlog('ping result', pong);
+    await window.fetchServerLogs(); // pull what the server logged for ping
   } catch (e) {
-    showError('Backend unreachable on ping(): ' + (e && e.message) +
-              '. Open Apps Script → Executions to see the server error.');
+    showError('Backend unreachable on ping(): ' + (e && e.message));
+    try { await window.fetchServerLogs(); } catch (_) {}
     return;
   }
 
@@ -418,9 +461,10 @@ async function bootApp() {
   try {
     dlog('step 2/2: bootstrapApp()');
     boot = await withTimeout(api('bootstrapApp'), 45000, 'bootstrapApp');
+    await window.fetchServerLogs();
   } catch (e) {
-    showError('bootstrapApp failed: ' + (e && e.message) +
-              '. Try running pingBootstrap() from the editor.');
+    showError('bootstrapApp failed: ' + (e && e.message));
+    try { await window.fetchServerLogs(); } catch (_) {}
     return;
   }
 
