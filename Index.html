@@ -127,7 +127,7 @@
 <div id="loader" class="denied">
   <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
   <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v10 (diagnostic)</p>
+  <p class="text-muted small mt-2" style="font-size:.7rem">build v11 (bisect)</p>
   <p class="text-muted" style="font-size:.7rem;margin:8px 0 4px">
     Diagnostic log — triple-click inside the box to select all, then copy:
   </p>
@@ -345,12 +345,7 @@
   window.__appendDebug('[early5] about to enter main body at ' + new Date().toISOString());
 </script>
 <script>
-// [early3] marker — runs before anything else in the main script.
-(function () {
-  var dbg = document.getElementById('debugPanel');
-  if (dbg) dbg.textContent += '[early3] main script tag parsed and executing at ' + new Date().toISOString() + '\n';
-})();
-
+window.__appendDebug && window.__appendDebug('[main-0] main body opened');
 // ============================================================
 // STATE  (single-shot cache; navigation renders from this, no refetch)
 // ============================================================
@@ -395,6 +390,7 @@ window.fetchServerLogs = async function fetchServerLogs() {
   }
 };
 
+window.__appendDebug && window.__appendDebug('[main-1] STATE + DEBUG defined');
 // ============================================================
 // API HELPER (wraps google.script.run with promises + logging)
 // CRITICAL: google.script.run is a Proxy. You CANNOT introspect it
@@ -441,6 +437,7 @@ function toast(msg, type='success') {
   setTimeout(() => t.remove(), 2500);
 }
 
+window.__appendDebug && window.__appendDebug('[main-2] API helper defined');
 // ============================================================
 // BOOT (single round-trip; caches everything for instant navigation)
 // ============================================================
@@ -558,6 +555,7 @@ function applyRoleVisibility() {
   document.getElementById('fab').classList.toggle('hidden', !p.addCandidate);
 }
 
+window.__appendDebug && window.__appendDebug('[main-3] BOOT functions defined');
 // ============================================================
 // ROUTER
 // ============================================================
@@ -594,6 +592,7 @@ function renderView() {
   }
 }
 
+window.__appendDebug && window.__appendDebug('[main-4] ROUTER defined');
 // ============================================================
 // DASHBOARD
 // ============================================================
@@ -636,6 +635,7 @@ function openNotScreened() {
   navigate('candidates');
 }
 
+window.__appendDebug && window.__appendDebug('[main-5] DASHBOARD defined');
 // ============================================================
 // CANDIDATES (date-sorted CV table; default: New + Not Screened)
 // ============================================================
@@ -928,6 +928,7 @@ async function uploadResume(candidateId) {
   }
 }
 
+window.__appendDebug && window.__appendDebug('[main-6] CANDIDATES section defined');
 // ============================================================
 // INTERVIEWS
 // ============================================================
@@ -1011,6 +1012,7 @@ async function submitFeedback(e) {
   } catch (err) { toast(err.message || 'Failed.', 'danger'); }
 }
 
+window.__appendDebug && window.__appendDebug('[main-7] INTERVIEWS defined');
 // ============================================================
 // ANALYTICS
 // ============================================================
@@ -1056,6 +1058,7 @@ function renderAnalytics(m) {
   `;
 }
 
+window.__appendDebug && window.__appendDebug('[main-8] ANALYTICS defined');
 // ============================================================
 // PROFILE
 // ============================================================
@@ -1141,6 +1144,7 @@ async function removeUser(id) {
   catch (e) { toast(e.message || 'Failed.', 'danger'); }
 }
 
+window.__appendDebug && window.__appendDebug('[main-9] PROFILE defined');
 // ============================================================
 // HELPERS
 // ============================================================
@@ -1173,8 +1177,10 @@ function registerSw() {
   } catch (e) {}
 }
 
+window.__appendDebug && window.__appendDebug('[main-10] all sections defined; calling bootApp()');
 // Initial boot
 bootApp();
+window.__appendDebug && window.__appendDebug('[main-11] bootApp() invocation returned (async)');
 </script>
 </body>
 </html>
