@@ -90,6 +90,29 @@
   .skeleton { background: linear-gradient(90deg,#eef2f7,#f8fafc,#eef2f7); background-size: 200% 100%;
     animation: sk 1.2s infinite; border-radius: 8px; height: 60px; margin-bottom: 8px; }
   @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .spin { animation: spin 1s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cv-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .cv-table th, .cv-table td { padding: 10px 8px; font-size: .85rem; vertical-align: middle; }
+  .cv-table thead th {
+    position: sticky; top: 0; background: #f1f5f9; color: #475569;
+    font-weight: 600; text-transform: uppercase; font-size: .68rem;
+    letter-spacing: .5px; border-bottom: 1px solid #e5e7eb;
+  }
+  .cv-table tbody tr { background: #fff; cursor: pointer; }
+  .cv-table tbody tr:hover { background: #f8fafc; }
+  .cv-table tbody td { border-bottom: 1px solid #f1f5f9; }
+  .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }
+  .chip-row::-webkit-scrollbar { display: none; }
+  .chip {
+    border: 1px solid #e5e7eb; background: #fff; color: #475569;
+    padding: 6px 12px; border-radius: 999px; font-size: .8rem;
+    white-space: nowrap; cursor: pointer;
+  }
+  .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+  .cv-name { font-weight: 600; color: #0f172a; }
+  .cv-meta { color: #64748b; font-size: .75rem; }
+  .cv-link { color: var(--brand); text-decoration: none; }
   .denied {
     min-height: 100vh; display: flex; align-items: center; justify-content: center;
     flex-direction: column; padding: 30px; text-align: center; color: #475569;
@@ -116,7 +139,7 @@
         <h5 id="screenTitle">Dashboard</h5>
         <small id="userInfo"></small>
       </div>
-      <button class="btn btn-sm text-white" onclick="refreshAll()"><i class="bi bi-arrow-clockwise"></i></button>
+      <button id="refreshBtn" class="btn btn-sm text-white" onclick="refreshFromServer()"><i class="bi bi-arrow-clockwise"></i></button>
     </div>
   </header>
 
@@ -231,14 +254,19 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 // ============================================================
-// STATE
+// STATE  (single-shot cache; navigation renders from this, no refetch)
 // ============================================================
 const state = {
   user: null,
   view: 'dashboard',
   candidates: [],
   interviews: [],
-  filters: { status: '', q: '' }
+  kpis: null,
+  metrics: null,
+  roleStats: [],
+  filters: { status: 'PENDING', q: '' }, // default: New + Not Screened
+  loaded: false,
+  refreshing: false
 };
 
 // ============================================================
@@ -263,20 +291,21 @@ function toast(msg, type='success') {
 }
 
 // ============================================================
-// BOOT
+// BOOT (single round-trip; caches everything for instant navigation)
 // ============================================================
 async function bootApp() {
   document.getElementById('gate').classList.add('hidden');
   document.getElementById('app').classList.add('hidden');
   try {
-    const me = await api('getCurrentUser');
-    if (!me.authorized) {
-      document.getElementById('gateMsg').textContent = me.message || 'Access Denied';
+    const boot = await api('bootstrapApp');
+    if (!boot.user || !boot.user.authorized) {
+      document.getElementById('gateMsg').textContent =
+        (boot.user && boot.user.message) || 'Access Denied';
       document.getElementById('gate').classList.remove('hidden');
       return;
     }
-    state.user = me;
-    document.getElementById('userInfo').textContent = `${me.name} · ${me.role}`;
+    applyBoot(boot);
+    document.getElementById('userInfo').textContent = `${state.user.name} · ${state.user.role}`;
     document.getElementById('app').classList.remove('hidden');
     applyRoleVisibility();
     navigate('dashboard');
@@ -284,6 +313,36 @@ async function bootApp() {
   } catch (e) {
     document.getElementById('gateMsg').textContent = (e && e.message) || 'Failed to load.';
     document.getElementById('gate').classList.remove('hidden');
+  }
+}
+
+function applyBoot(boot) {
+  state.user = boot.user;
+  state.candidates = boot.candidates || [];
+  state.interviews = boot.interviews || [];
+  state.kpis = boot.kpis || null;
+  state.metrics = boot.metrics || null;
+  state.roleStats = boot.roleStats || [];
+  state.loaded = true;
+}
+
+// Background refresh — no skeleton, no flicker.
+async function refreshFromServer() {
+  if (state.refreshing) return;
+  state.refreshing = true;
+  const icon = document.querySelector('#refreshBtn i');
+  if (icon) icon.classList.add('spin');
+  try {
+    const boot = await api('bootstrapApp');
+    if (boot.user && boot.user.authorized) {
+      applyBoot(boot);
+      renderView();
+    }
+  } catch (e) {
+    toast(e.message || 'Refresh failed.', 'danger');
+  } finally {
+    state.refreshing = false;
+    if (icon) icon.classList.remove('spin');
   }
 }
 
@@ -308,12 +367,16 @@ function navigate(view) {
   renderView();
 }
 
-function refreshAll() { renderView(); }
+function refreshAll() { refreshFromServer(); }
 
-async function renderView() {
+// Synchronous render from cache — no network = instant.
+function renderView() {
   const m = document.getElementById('mainArea');
-  m.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
   try {
+    if (!state.loaded) {
+      m.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+      return;
+    }
     if (state.view === 'dashboard') return renderDashboard(m);
     if (state.view === 'candidates') return renderCandidates(m);
     if (state.view === 'interviews') return renderInterviews(m);
@@ -327,8 +390,8 @@ async function renderView() {
 // ============================================================
 // DASHBOARD
 // ============================================================
-async function renderDashboard(m) {
-  const kpi = await api('getDashboardKpis');
+function renderDashboard(m) {
+  const kpi = state.kpis || {};
   m.innerHTML = `
     <div class="row g-2 mb-3">
       ${kpiCard('Total', kpi.total, 'bi-people-fill', '#0d6efd')}
@@ -367,47 +430,118 @@ function openNotScreened() {
 }
 
 // ============================================================
-// CANDIDATES
+// CANDIDATES (date-sorted CV table; default: New + Not Screened)
 // ============================================================
-async function renderCandidates(m) {
-  state.candidates = await api('getCandidates');
+const CHIP_FILTERS = [
+  { key: 'PENDING',     label: 'Pending (New + Not Screened)' },
+  { key: '',            label: 'All' },
+  { key: 'Shortlisted', label: 'Shortlisted' },
+  { key: 'Interviewed', label: 'Interviewed' },
+  { key: 'Selected',    label: 'Selected' },
+  { key: 'Rejected',    label: 'Rejected' },
+  { key: 'On Hold',     label: 'On Hold' }
+];
+
+function renderCandidates(m) {
   m.innerHTML = `
-    <div class="d-flex gap-2 mb-3">
-      <input id="searchInput" class="form-control" placeholder="Search name, role, phone..." value="${state.filters.q||''}" oninput="state.filters.q=this.value; renderCandidateList()">
-      <select id="statusFilter" class="form-select" style="max-width:160px" onchange="state.filters.status=this.value; renderCandidateList()">
-        <option value="">All Status</option>
-        ${['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
-          .map(s=>`<option ${state.filters.status===s?'selected':''}>${s}</option>`).join('')}
-      </select>
+    <input id="searchInput" class="form-control mb-2" placeholder="Search name, role, phone, email..."
+           value="${escapeAttr(state.filters.q||'')}"
+           oninput="state.filters.q=this.value; renderCandidateList()">
+    <div class="chip-row" id="chipRow">
+      ${CHIP_FILTERS.map(f => `
+        <button class="chip ${state.filters.status===f.key?'active':''}"
+                onclick="state.filters.status='${f.key}'; renderCandidateList()">
+          ${escapeHtml(f.label)}
+        </button>`).join('')}
     </div>
     <div id="candList"></div>`;
   renderCandidateList();
 }
 
 function renderCandidateList() {
+  // Refresh active chip state
+  const chips = document.querySelectorAll('#chipRow .chip');
+  chips.forEach((c, i) => c.classList.toggle('active', CHIP_FILTERS[i].key === state.filters.status));
+
   const q = (state.filters.q || '').toLowerCase();
   const st = state.filters.status;
-  const list = state.candidates.filter(c => {
-    if (st && c.Status !== st) return false;
+
+  let list = state.candidates.filter(c => {
+    if (st === 'PENDING') {
+      if (c.Status !== 'New' && c.Status !== 'Not Screened') return false;
+    } else if (st && c.Status !== st) return false;
     if (q) {
       const blob = `${c.Name} ${c.RoleApplied} ${c.Phone} ${c.Email}`.toLowerCase();
       if (!blob.includes(q)) return false;
     }
     return true;
   });
+
+  // Newest first by CreatedAt
+  list.sort((a, b) => new Date(b.CreatedAt || 0) - new Date(a.CreatedAt || 0));
+
   const el = document.getElementById('candList');
-  if (!list.length) { el.innerHTML = '<div class="text-center text-muted py-5">No candidates.</div>'; return; }
-  el.innerHTML = list.map(c => `
-    <div class="candidate-row" onclick="openCandidate('${c.CandidateID}')">
-      <div class="flex-grow-1">
-        <div class="d-flex justify-content-between">
-          <strong>${escapeHtml(c.Name)}</strong>
-          <span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status||''}</span>
-        </div>
-        <div class="small text-muted">${escapeHtml(c.RoleApplied||'—')}</div>
-        <div class="small text-muted"><i class="bi bi-telephone"></i> ${escapeHtml(c.Phone||'—')} · ${escapeHtml(c.Email||'')}</div>
+  if (!list.length) {
+    el.innerHTML = '<div class="text-center text-muted py-5">No candidates match this filter.</div>';
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="kpi-card p-0 mb-2" style="overflow:hidden">
+      <div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:#f8fafc">
+        <div class="cv-meta"><strong>${list.length}</strong> CV${list.length===1?'':'s'} · newest first</div>
+        <div class="cv-meta"><i class="bi bi-clock-history"></i> Upload order</div>
       </div>
-    </div>`).join('');
+      <div style="overflow-x:auto">
+      <table class="cv-table">
+        <thead>
+          <tr>
+            <th>Candidate</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>CV</th>
+            <th>Uploaded</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(c => `
+            <tr onclick="openCandidate('${c.CandidateID}')">
+              <td>
+                <div class="cv-name">${escapeHtml(c.Name)}</div>
+                <div class="cv-meta">${escapeHtml(c.Phone||'')}${c.Email?' · '+escapeHtml(c.Email):''}</div>
+              </td>
+              <td>${escapeHtml(c.RoleApplied||'—')}</td>
+              <td><span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status||''}</span></td>
+              <td onclick="event.stopPropagation()">
+                ${c.ResumeLink
+                  ? `<a class="cv-link" href="${encodeURI(c.ResumeLink)}" target="_blank"><i class="bi bi-file-earmark-text"></i> View</a>`
+                  : '<span class="cv-meta">—</span>'}
+              </td>
+              <td class="cv-meta">${formatRelative(c.CreatedAt)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      </div>
+    </div>`;
+}
+
+function candidateNameById(id) {
+  const c = state.candidates.find(x => x.CandidateID === id);
+  return c ? c.Name : id;
+}
+
+function formatRelative(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return String(d);
+  const diff = Date.now() - dt.getTime();
+  const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), days = Math.floor(diff/86400000);
+  if (diff < 0) return dt.toLocaleDateString();
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  if (h < 24) return h + 'h ago';
+  if (days < 7) return days + 'd ago';
+  return dt.toLocaleDateString();
 }
 
 function openAddCandidateModal() {
@@ -419,7 +553,7 @@ async function submitCandidate(e) {
   e.preventDefault();
   const form = e.target;
   const fd = Object.fromEntries(new FormData(form).entries());
-  delete fd.ResumeFile; // file is handled separately as base64
+  delete fd.ResumeFile;
 
   const fileInput = document.getElementById('newResumeFile');
   const btn = form.querySelector('button[type="submit"]');
@@ -434,10 +568,21 @@ async function submitCandidate(e) {
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
     }
-    await api('addCandidate', fd);
+    const res = await api('addCandidate', fd);
+    // Insert into cache instantly so the new CV shows up at the top of the list.
+    state.candidates.unshift({
+      CandidateID: res.CandidateID,
+      Name: fd.Name, Phone: fd.Phone || '', Email: fd.Email || '',
+      RoleApplied: fd.RoleApplied || '',
+      ResumeLink: res.ResumeLink || fd.ResumeLink || '',
+      Source: fd.Source || '',
+      Status: fd.Status || 'New',
+      CreatedAt: new Date().toISOString()
+    });
     bootstrap.Modal.getInstance(document.getElementById('candidateModal')).hide();
     toast('Candidate saved.');
     renderView();
+    refreshFromServer();
   } catch (err) {
     toast(err.message || 'Failed.', 'danger');
   } finally {
@@ -468,9 +613,10 @@ function fileToUploadPayload(file) {
   });
 }
 
-async function openCandidate(id) {
-  const c = await api('getCandidate', id);
-  const interviews = await api('getInterviewsByCandidate', id);
+function openCandidate(id) {
+  const c = state.candidates.find(x => x.CandidateID === id);
+  if (!c) { toast('Candidate not found in cache. Refresh.', 'warning'); return; }
+  const interviews = state.interviews.filter(i => i.CandidateID === id);
   const p = state.user.permissions;
   const statusOpts = ['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
     .map(s => `<option ${c.Status===s?'selected':''}>${s}</option>`).join('');
@@ -529,13 +675,21 @@ async function openCandidate(id) {
   new bootstrap.Modal('#detailModal').show();
 }
 
+// Mutate the local cache so the UI reflects writes instantly.
+function patchCandidateInCache(id, patch) {
+  const c = state.candidates.find(x => x.CandidateID === id);
+  if (c) Object.assign(c, patch);
+}
+
 async function changeStatus(id) {
   const v = document.getElementById('statusSelect').value;
   try {
     await api('updateStatus', id, v);
+    patchCandidateInCache(id, { Status: v });
     toast('Status updated.');
     bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
     renderView();
+    refreshFromServer(); // pull fresh data in the background
   } catch (e) { toast(e.message || 'Failed.', 'danger'); }
 }
 
@@ -552,6 +706,7 @@ async function uploadResume(candidateId) {
   try {
     const payload = await fileToUploadPayload(input.files[0]);
     const res = await api('uploadResumeForCandidate', candidateId, payload);
+    patchCandidateInCache(candidateId, { ResumeLink: res.ResumeLink });
     toast('Resume uploaded.');
     const area = document.getElementById('resumeLinkArea');
     if (area && res.ResumeLink) {
@@ -569,8 +724,7 @@ async function uploadResume(candidateId) {
 // ============================================================
 // INTERVIEWS
 // ============================================================
-async function renderInterviews(m) {
-  state.interviews = await api('getInterviews');
+function renderInterviews(m) {
   if (!state.interviews.length) {
     m.innerHTML = '<div class="text-center text-muted py-5">No interviews scheduled.</div>';
     return;
@@ -584,7 +738,7 @@ async function renderInterviews(m) {
             <strong>${escapeHtml(i.Round)} Interview</strong>
             <span class="small text-muted">${formatDate(i.DateTime)}</span>
           </div>
-          <div class="small text-muted">Candidate: ${escapeHtml(i.CandidateID)}</div>
+          <div class="small text-muted">Candidate: ${escapeHtml(candidateNameById(i.CandidateID))}</div>
           <div class="small">Interviewer: ${escapeHtml(i.Interviewer||'—')} · Status: ${escapeHtml(i.Status||'—')}</div>
           ${i.Feedback ? `<div class="small mt-1 fst-italic">${escapeHtml(i.Feedback)}</div>` : ''}
           ${state.user.permissions.addFeedback ? `
@@ -606,9 +760,16 @@ async function submitInterview(e) {
   e.preventDefault();
   const fd = Object.fromEntries(new FormData(e.target).entries());
   try {
-    await api('addInterview', fd);
+    const res = await api('addInterview', fd);
+    state.interviews.push({
+      InterviewID: res.InterviewID,
+      CandidateID: fd.CandidateID, Round: fd.Round,
+      Interviewer: fd.Interviewer, DateTime: fd.DateTime,
+      Status: fd.Status || 'Scheduled', Feedback: '', Score: ''
+    });
     bootstrap.Modal.getInstance(document.getElementById('interviewModal')).hide();
     toast('Interview scheduled.');
+    refreshFromServer();
   } catch (err) { toast(err.message || 'Failed.', 'danger'); }
 }
 
@@ -630,19 +791,26 @@ async function submitFeedback(e) {
   const fd = Object.fromEntries(new FormData(e.target).entries());
   try {
     await api('updateInterviewFeedback', fd);
+    const iv = state.interviews.find(x => x.InterviewID === fd.InterviewID);
+    if (iv) {
+      if (fd.Feedback !== undefined) iv.Feedback = fd.Feedback;
+      if (fd.Score !== undefined) iv.Score = fd.Score;
+      if (fd.Status !== undefined) iv.Status = fd.Status;
+    }
     bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
     toast('Feedback saved.');
     renderView();
+    refreshFromServer();
   } catch (err) { toast(err.message || 'Failed.', 'danger'); }
 }
 
 // ============================================================
 // ANALYTICS
 // ============================================================
-async function renderAnalytics(m) {
-  const [metrics, roleStats] = await Promise.all([
-    api('getConversionMetrics'), api('getRoleWiseStats')
-  ]);
+function renderAnalytics(m) {
+  const metrics = state.metrics || { funnel:{new:0,screened:0,interviewed:0,selected:0},
+                                     screeningRate:0, interviewConversionRate:0, rejectionRate:0 };
+  const roleStats = state.roleStats || [];
   const fn = metrics.funnel;
   const max = Math.max(fn.new, 1);
   const w = v => Math.max(8, Math.round((v / max) * 100));
@@ -684,7 +852,7 @@ async function renderAnalytics(m) {
 // ============================================================
 // PROFILE
 // ============================================================
-async function renderProfile(m) {
+function renderProfile(m) {
   const u = state.user;
   let extra = '';
   if (u.permissions.exportCsv) {
