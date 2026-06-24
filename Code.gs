@@ -123,6 +123,59 @@ function nowIso_() {
 }
 
 // ============================================================
+// DIAGNOSTICS — run these from the Apps Script editor to verify
+// the backend is healthy without touching the web UI.
+// ============================================================
+
+/** Quick smoke test. Run from editor → View → Logs. */
+function ping() {
+  var t0 = new Date().getTime();
+  var ss;
+  try { ss = getSpreadsheet_(); }
+  catch (e) { Logger.log('NO SPREADSHEET: ' + e.message); return 'NO SPREADSHEET'; }
+
+  var email = '';
+  try { email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail(); }
+  catch (e) { Logger.log('NO EMAIL: ' + e.message); }
+
+  var sheetsOk = {};
+  Object.keys(CONFIG.SHEETS).forEach(function(k){
+    sheetsOk[k] = !!ss.getSheetByName(CONFIG.SHEETS[k]);
+  });
+
+  var out = {
+    ok: true,
+    elapsedMs: new Date().getTime() - t0,
+    user: email,
+    spreadsheetId: ss.getId(),
+    spreadsheetName: ss.getName(),
+    sheets: sheetsOk
+  };
+  Logger.log(JSON.stringify(out, null, 2));
+  return out;
+}
+
+/** Times a real bootstrap call and logs the result. */
+function pingBootstrap() {
+  var t0 = new Date().getTime();
+  var res = bootstrapApp();
+  var ms = new Date().getTime() - t0;
+  Logger.log('bootstrapApp took ' + ms + 'ms; authorized=' +
+             (res && res.user && res.user.authorized) +
+             '; candidates=' + (res && res.candidates ? res.candidates.length : 'n/a'));
+  return { elapsedMs: ms, authorized: res && res.user && res.user.authorized };
+}
+
+/** Wipe both caches. Useful after manually editing the sheets. */
+function clearAllCaches() {
+  var c = CacheService.getScriptCache();
+  c.remove(CONFIG.CACHE_KEY_BOOT);
+  // No way to enumerate cache keys; clear is best-effort.
+  Logger.log('Bootstrap cache cleared.');
+  return 'ok';
+}
+
+// ============================================================
 // SETUP (run once)
 // ============================================================
 function setupSheets() {
