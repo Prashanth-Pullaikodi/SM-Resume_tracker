@@ -200,7 +200,25 @@ exportCandidatesCsv()             // Admin
 
 ---
 
-## 6. Bonus Features (implemented)
+## 6. Performance
+
+- `bootstrapApp()` returns user + candidates + interviews + KPIs + analytics
+  in **one round trip** so the frontend only hits the network on load and on
+  writes — every navigation, candidate click, and tab switch renders from
+  the in-memory cache instantly.
+- The bootstrap payload is **cached in `CacheService`** (script-wide, 5 min
+  TTL). The first user pays the sheet-read cost; everyone else gets <100 ms
+  responses. Every write call (via `logAudit_`) invalidates the cache so
+  changes are visible immediately.
+- The `getUserRole(email)` lookup is **cached per email** (10 min TTL) so
+  the Users sheet isn't re-read on every backend call. Add/delete user
+  invalidates that key.
+- Date cells are coerced to ISO strings in `sheetToObjects_` so
+  `google.script.run` can serialize the payload reliably.
+
+If the cache is hot, total round-trip is typically **300–700 ms**.
+
+## 7. Bonus Features (implemented)
 
 - ✅ Duplicate detection on candidate email / phone
 - ✅ Auto UUID generation (`Utilities.getUuid()`) for all IDs
@@ -241,7 +259,7 @@ screen the next time they open the app.
 
 ---
 
-## 7. Updating the App
+## 8. Updating the App
 
 After editing `Code.gs` or `Index.html`:
 
@@ -253,7 +271,7 @@ The Web App URL stays the same.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Problem | Fix |
 |--------|-----|

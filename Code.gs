@@ -28,7 +28,13 @@ var CONFIG = {
   // the script owner's "My Drive" root on first upload.
   RESUMES_FOLDER_ID: '',
   RESUMES_FOLDER_NAME: 'Resort Recruitment Resumes',
-  MAX_UPLOAD_BYTES: 25 * 1024 * 1024 // 25 MB hard cap per resume
+  MAX_UPLOAD_BYTES: 25 * 1024 * 1024, // 25 MB hard cap per resume
+
+  // Cache TTL for the bootstrap payload (seconds). Writes invalidate the
+  // cache, so this is just an upper bound for stale-reads from other tabs.
+  CACHE_TTL_SECONDS: 300,
+  CACHE_KEY_BOOT: 'boot_v2',
+  CACHE_KEY_USER_ROLE: 'role_v1_'
 };
 
 // ============================================================
@@ -270,9 +276,38 @@ function initialSetup() {
  * single google.script.run round trip. Cuts navigation latency by ~3x
  * because the frontend no longer needs a separate call per view.
  */
+// ---- Cache helpers ----------------------------------------------------
+function getCache_() { return CacheService.getScriptCache(); }
+
+function invalidateBootCache_() {
+  try { getCache_().remove(CONFIG.CACHE_KEY_BOOT); } catch (e) {}
+}
+
 function bootstrapApp() {
   try {
-    return bootstrapAppImpl_();
+    // Serve from cache when present — turns ~1–3s sheet reads into <100ms.
+    var cache = getCache_();
+    var cached = cache.get(CONFIG.CACHE_KEY_BOOT);
+    if (cached) {
+      try {
+        var payload = JSON.parse(cached);
+        // Still re-check the user; permissions could have changed.
+        payload.user = getCurrentUser();
+        if (!payload.user.authorized) return { user: payload.user };
+        payload.cached = true;
+        return payload;
+      } catch (e) { /* fall through to fresh read */ }
+    }
+
+    var fresh = bootstrapAppImpl_();
+    if (fresh && fresh.user && fresh.user.authorized) {
+      try {
+        var json = JSON.stringify(fresh);
+        // CacheService caps each value at 100 KB. Skip silently above that.
+        if (json.length < 95000) cache.put(CONFIG.CACHE_KEY_BOOT, json, CONFIG.CACHE_TTL_SECONDS);
+      } catch (e) {}
+    }
+    return fresh;
   } catch (e) {
     // Surface server-side errors as an authorized=false payload so the
     // frontend can render a useful message instead of going blank.
@@ -377,9 +412,16 @@ function getCurrentUser() {
 
 function getUserRole(email) {
   if (!email) return null;
+  var cache = getCache_();
+  var key = CONFIG.CACHE_KEY_USER_ROLE + String(email).toLowerCase();
+  var cached = cache.get(key);
+  if (cached !== null) return cached === '__none__' ? null : cached;
+
   var users = sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
   var match = users.filter(function(u){ return String(u.Email).toLowerCase() === String(email).toLowerCase(); })[0];
-  return match ? String(match.Role) : null;
+  var role = match ? String(match.Role) : null;
+  try { cache.put(key, role || '__none__', 600); } catch (e) {}
+  return role;
 }
 
 function authorizeUser(requiredRoles) {
@@ -411,6 +453,9 @@ function rolePermissions_(role) {
 }
 
 function logAudit_(email, action, details) {
+  // Every successful write goes through here, so it's the natural
+  // place to invalidate the bootstrap cache.
+  invalidateBootCache_();
   try {
     getSheet_(CONFIG.SHEETS.AUDIT_LOG)
       .appendRow([uuid_(), email, action, JSON.stringify(details || {}), nowIso_()]);
@@ -684,6 +729,7 @@ function addUser(data) {
   if (getUserRole(data.Email)) throw new Error('User already exists.');
   getSheet_(CONFIG.SHEETS.USERS)
     .appendRow([uuid_(), data.Name || '', data.Email, data.Role]);
+  try { getCache_().remove(CONFIG.CACHE_KEY_USER_ROLE + String(data.Email).toLowerCase()); } catch (e) {}
   logAudit_(me.email, 'addUser', { email: data.Email, role: data.Role });
   return { ok: true };
 }
@@ -698,6 +744,7 @@ function deleteUser(userId) {
     throw new Error('You cannot delete your own account.');
   }
   sheet.deleteRow(row);
+  try { getCache_().remove(CONFIG.CACHE_KEY_USER_ROLE + String(email).toLowerCase()); } catch (e) {}
   logAudit_(me.email, 'deleteUser', { userId: userId, email: email });
   return { ok: true };
 }
