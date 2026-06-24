@@ -31,18 +31,20 @@ Google Apps Script + Google Sheets with role-based access control.
 
 ## File List
 
-| File | Purpose |
-|------|---------|
-| `Code.gs` | Apps Script backend (RBAC, CRUD, analytics, serves manifest + SW) |
-| `Index.html` | Single-page mobile-first frontend |
-| `manifest.json` | PWA manifest (standalone hosting reference) |
-| `service-worker.js` | Service worker (standalone hosting reference) |
-| `README.md` | This file |
+Google Apps Script projects only allow `.gs` and `.html` files, so every
+artifact in this repo maps directly to one of those two types.
 
-> When deploying as an Apps Script Web App, the **manifest** and **service worker**
-> are served directly by `Code.gs` via `?page=manifest` and `?page=sw`. The
-> standalone `manifest.json` and `service-worker.js` files are kept for reference
-> and for cases where you mirror the UI on a different host.
+| Repo file | Apps Script file | Type | Purpose |
+|-----------|------------------|------|---------|
+| `Code.gs` | `Code.gs` | Script | RBAC backend, CRUD, analytics, doGet router |
+| `Index.html` | `Index.html` | HTML | Mobile-first SPA frontend |
+| `Manifest.html` | `Manifest.html` | HTML | PWA manifest JSON (served as JSON via `?page=manifest`) |
+| `ServiceWorker.html` | `ServiceWorker.html` | HTML | Service worker JS (served as JS via `?page=sw`) |
+| `README.md` | — | — | This file (not added to the Apps Script project) |
+
+> `Manifest.html` and `ServiceWorker.html` wrap the raw JSON / JS in a
+> commented HTML container. `Code.gs` strips the wrapper and serves the
+> inner content with the correct MIME type via `doGet`.
 
 ---
 
@@ -55,9 +57,13 @@ create them by hand.
 
 1. Open Google Drive → New → **Google Sheets**. Name it `Resort Recruitment DB`.
 2. Extensions → **Apps Script** → name the project `Resort Recruitment`.
-3. Paste contents of `Code.gs` into `Code.gs`.
-4. File → New → **HTML** named `Index`, paste contents of `Index.html`.
-5. Save, then in the editor run **`setupSheets`** once.
+3. Paste contents of `Code.gs` into the default `Code.gs`.
+4. Create three HTML files (**File → New → HTML file**) with these *exact* names
+   (case-sensitive — Apps Script appends `.html` for you):
+   - `Index` → paste `Index.html`
+   - `Manifest` → paste `Manifest.html`
+   - `ServiceWorker` → paste `ServiceWorker.html`
+5. Save the project, then in the editor run **`setupSheets`** once.
    - Grant the requested OAuth scopes.
    - This creates the 5 sheets with headers and seeds you as the first **Admin**.
 

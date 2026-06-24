@@ -1,15 +1,14 @@
-// Resort Recruitment - Service Worker
-// Caches the app shell for offline access.
-
+<!--
+  ServiceWorker.html — served via Code.gs doGet?page=sw with JavaScript MIME type.
+  Apps Script only allows .gs and .html files, so the SW code lives here.
+  Everything between the marker comments is returned as raw JS.
+-->
+//<SW>
 const CACHE = 'recruit-shell-v1';
-const SHELL = [
-  './',
-  './manifest.json'
-];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {})
+    caches.open(CACHE).then((c) => c.addAll([self.registration.scope])).catch(() => {})
   );
   self.skipWaiting();
 });
@@ -25,8 +24,6 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-
-  // Network-first with cache fallback (good for dynamic Apps Script responses)
   event.respondWith(
     fetch(event.request)
       .then((res) => {
@@ -35,7 +32,8 @@ self.addEventListener('fetch', (event) => {
         return res;
       })
       .catch(() =>
-        caches.match(event.request).then((r) => r || caches.match('./'))
+        caches.match(event.request).then((r) => r || caches.match(self.registration.scope))
       )
   );
 });
+//</SW>

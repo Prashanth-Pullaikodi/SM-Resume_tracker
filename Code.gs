@@ -479,47 +479,19 @@ function exportCandidatesCsv() {
 
 // ============================================================
 // MANIFEST AND SERVICE WORKER (served via doGet)
+// Both live in HTML files because Apps Script only allows .gs and .html.
 // ============================================================
 function getManifestJson() {
+  var raw = HtmlService.createHtmlOutputFromFile('Manifest').getContent();
+  // Strip the leading <!-- ... --> comment block.
+  raw = raw.replace(/<!--[\s\S]*?-->/, '').trim();
   var url = ScriptApp.getService().getUrl();
-  return JSON.stringify({
-    name: 'Resort Recruitment',
-    short_name: 'Recruit',
-    description: 'Resort Recruitment Management System',
-    start_url: url,
-    scope: url,
-    display: 'standalone',
-    orientation: 'portrait',
-    background_color: '#ffffff',
-    theme_color: '#0d6efd',
-    icons: [
-      { src: 'https://www.gstatic.com/images/branding/product/2x/forms_2020q4_48dp.png', sizes: '192x192', type: 'image/png' },
-      { src: 'https://www.gstatic.com/images/branding/product/2x/forms_2020q4_48dp.png', sizes: '512x512', type: 'image/png' }
-    ]
-  });
+  return raw.replace(/__START_URL__/g, url);
 }
 
 function getServiceWorkerJs() {
-  return [
-    "const CACHE = 'recruit-shell-v1';",
-    "const SHELL = [self.registration.scope];",
-    "self.addEventListener('install', e => {",
-    "  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).catch(()=>{}));",
-    "  self.skipWaiting();",
-    "});",
-    "self.addEventListener('activate', e => {",
-    "  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))));",
-    "  self.clients.claim();",
-    "});",
-    "self.addEventListener('fetch', e => {",
-    "  if (e.request.method !== 'GET') return;",
-    "  e.respondWith(",
-    "    fetch(e.request).then(res => {",
-    "      const copy = res.clone();",
-    "      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});",
-    "      return res;",
-    "    }).catch(() => caches.match(e.request).then(r => r || caches.match(self.registration.scope)))",
-    "  );",
-    "});"
-  ].join('\n');
+  var raw = HtmlService.createHtmlOutputFromFile('ServiceWorker').getContent();
+  // Extract the JS between the //<SW> ... //</SW> markers.
+  var m = raw.match(/\/\/<SW>([\s\S]*?)\/\/<\/SW>/);
+  return m ? m[1].trim() : '';
 }
