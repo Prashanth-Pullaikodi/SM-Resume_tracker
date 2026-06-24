@@ -20,6 +20,13 @@ var CONFIG = {
   },
   STATUSES: ['New', 'Not Screened', 'Shortlisted', 'Interviewed', 'Selected', 'Rejected', 'On Hold'],
   ROLES: ['Admin', 'HR', 'Interviewer', 'Viewer'],
+
+  // ---- Drive upload settings --------------------------------------------
+  // Paste the ID of the Drive folder where all resumes should be saved.
+  // Get it from the folder URL: https://drive.google.com/drive/folders/<THIS_PART>
+  // If left blank, a folder named RESUMES_FOLDER_NAME is auto-created in
+  // the script owner's "My Drive" root on first upload.
+  RESUMES_FOLDER_ID: '',
   RESUMES_FOLDER_NAME: 'Resort Recruitment Resumes',
   MAX_UPLOAD_BYTES: 25 * 1024 * 1024 // 25 MB hard cap per resume
 };
@@ -378,8 +385,19 @@ function addCandidate(data) {
 // RESUME UPLOAD → DRIVE
 // ============================================================
 function getOrCreateResumesFolder_() {
+  // 1. Explicit folder ID wins (recommended for shared drives / shared folders).
+  if (CONFIG.RESUMES_FOLDER_ID) {
+    try {
+      return DriveApp.getFolderById(CONFIG.RESUMES_FOLDER_ID);
+    } catch (e) {
+      throw new Error('Configured RESUMES_FOLDER_ID is invalid or inaccessible: ' +
+                      CONFIG.RESUMES_FOLDER_ID);
+    }
+  }
+  // 2. Otherwise reuse a folder of the configured name from My Drive.
   var folders = DriveApp.getFoldersByName(CONFIG.RESUMES_FOLDER_NAME);
   if (folders.hasNext()) return folders.next();
+  // 3. Last resort — create it.
   return DriveApp.createFolder(CONFIG.RESUMES_FOLDER_NAME);
 }
 

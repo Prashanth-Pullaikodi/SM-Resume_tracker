@@ -214,6 +214,24 @@ exportCandidatesCsv()             // Admin
   `ResumeLink` field. Available on the Add Candidate form and on the
   candidate detail modal. 25 MB cap per file.
 
+### Pinning the upload folder
+
+By default, every upload lands in a Drive folder named **Resort Recruitment
+Resumes** that's auto-created in the script owner's *My Drive* on first use.
+To force uploads into a specific folder (recommended — works with Shared
+Drives and folders you've already shared with HR):
+
+1. Open the target folder in Drive.
+2. Copy the ID from the URL: `https://drive.google.com/drive/folders/`**`<this part>`**
+3. In `Code.gs`, set:
+   ```js
+   RESUMES_FOLDER_ID: 'PASTE_THE_ID_HERE',
+   ```
+4. Save and redeploy a new version. All future uploads go into that folder.
+
+If `RESUMES_FOLDER_ID` is blank, the script falls back to the named folder
+behaviour above.
+
 ### Drive permissions
 
 Uploading triggers an extra OAuth scope (`drive`). The first time you click
