@@ -63,9 +63,13 @@ create them by hand.
    - `Index` → paste `Index.html`
    - `Manifest` → paste `Manifest.html`
    - `ServiceWorker` → paste `ServiceWorker.html`
-5. Save the project, then in the editor run **`setupSheets`** once.
+5. Save the project, then in the editor run **`initialSetup`** once.
    - Grant the requested OAuth scopes.
-   - This creates the 5 sheets with headers and seeds you as the first **Admin**.
+   - This creates all 5 sheets with headers, seeds you as the first **Admin**,
+     and populates sample users, candidates, interviews, and status history
+     so the dashboard and analytics screens have data to show.
+   - Safe to re-run — if candidates already exist, sample data is skipped.
+   - If you want headers only (no sample data), run `setupSheets` instead.
 
 ### Option B — Manual
 

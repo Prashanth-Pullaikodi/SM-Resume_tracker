@@ -135,6 +135,118 @@ function setupSheets() {
 }
 
 // ============================================================
+// INITIAL SETUP — run once from the Apps Script editor.
+// Creates sheets + headers, seeds you as Admin, then populates
+// sample users, candidates, interviews, and status history so the
+// dashboard and analytics screens have something to show.
+// Safe to re-run: it skips seeding if data already exists.
+// ============================================================
+function initialSetup() {
+  setupSheets();
+  var ss = getSpreadsheet_();
+
+  var usersSheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
+  var candSheet  = ss.getSheetByName(CONFIG.SHEETS.CANDIDATES);
+  var ivSheet    = ss.getSheetByName(CONFIG.SHEETS.INTERVIEWS);
+  var histSheet  = ss.getSheetByName(CONFIG.SHEETS.STATUS_HISTORY);
+  var auditSheet = ss.getSheetByName(CONFIG.SHEETS.AUDIT_LOG);
+
+  var adminEmail = Session.getActiveUser().getEmail() ||
+                   Session.getEffectiveUser().getEmail() ||
+                   'admin@example.com';
+
+  // -------- Sample Users (skip if already populated beyond the admin row) --------
+  if (usersSheet.getLastRow() < 3) {
+    var sampleUsers = [
+      [uuid_(), 'Priya HR',        'priya.hr@example.com',        'HR'],
+      [uuid_(), 'Rahul Manager',   'rahul.manager@example.com',   'Interviewer'],
+      [uuid_(), 'Anita Chef',      'anita.chef@example.com',      'Interviewer'],
+      [uuid_(), 'Vikram Viewer',   'vikram.viewer@example.com',   'Viewer']
+    ];
+    usersSheet.getRange(usersSheet.getLastRow() + 1, 1, sampleUsers.length, 4)
+              .setValues(sampleUsers);
+  }
+
+  // -------- Sample Candidates --------
+  if (candSheet.getLastRow() < 2) {
+    var now = new Date();
+    function daysAgo(n) {
+      var d = new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+      return d.toISOString();
+    }
+    var candIds = {
+      arjun:   uuid_(),
+      meera:   uuid_(),
+      sandeep: uuid_(),
+      kavya:   uuid_(),
+      rohit:   uuid_(),
+      neha:    uuid_(),
+      farhan:  uuid_(),
+      divya:   uuid_(),
+      kiran:   uuid_(),
+      sneha:   uuid_()
+    };
+    var sampleCandidates = [
+      [candIds.arjun,   'Arjun Nair',       '+919812340001', 'arjun.nair@example.com',    'Front Desk Executive', 'https://drive.google.com/file/d/sample-arjun',  'Naukri',   'Selected',     daysAgo(40)],
+      [candIds.meera,   'Meera Iyer',       '+919812340002', 'meera.iyer@example.com',    'Housekeeping Supervisor','https://drive.google.com/file/d/sample-meera', 'Referral', 'Interviewed',  daysAgo(25)],
+      [candIds.sandeep, 'Sandeep Kumar',    '+919812340003', 'sandeep.k@example.com',     'Chef de Partie',       'https://drive.google.com/file/d/sample-sandeep','Walk-in',  'Shortlisted',  daysAgo(15)],
+      [candIds.kavya,   'Kavya Reddy',      '+919812340004', 'kavya.reddy@example.com',   'Spa Therapist',        'https://drive.google.com/file/d/sample-kavya',  'LinkedIn', 'Not Screened', daysAgo(8)],
+      [candIds.rohit,   'Rohit Sharma',     '+919812340005', 'rohit.sharma@example.com',  'F&B Manager',          'https://drive.google.com/file/d/sample-rohit',  'Referral', 'Rejected',     daysAgo(35)],
+      [candIds.neha,    'Neha Pillai',      '+919812340006', 'neha.pillai@example.com',   'Front Desk Executive', 'https://drive.google.com/file/d/sample-neha',   'Naukri',   'Not Screened', daysAgo(3)],
+      [candIds.farhan,  'Farhan Ahmed',     '+919812340007', 'farhan.a@example.com',      'Sous Chef',            'https://drive.google.com/file/d/sample-farhan', 'Indeed',   'New',          daysAgo(2)],
+      [candIds.divya,   'Divya Menon',      '+919812340008', 'divya.menon@example.com',   'Guest Relations',      'https://drive.google.com/file/d/sample-divya',  'Walk-in',  'On Hold',      daysAgo(20)],
+      [candIds.kiran,   'Kiran Bose',       '+919812340009', 'kiran.bose@example.com',    'Housekeeping Supervisor','https://drive.google.com/file/d/sample-kiran', 'Referral', 'Interviewed',  daysAgo(18)],
+      [candIds.sneha,   'Sneha Krishnan',   '+919812340010', 'sneha.k@example.com',       'Spa Therapist',        'https://drive.google.com/file/d/sample-sneha',  'LinkedIn', 'New',          daysAgo(1)]
+    ];
+    candSheet.getRange(candSheet.getLastRow() + 1, 1, sampleCandidates.length, 9)
+             .setValues(sampleCandidates);
+
+    // -------- Sample Interviews (linked to the candidates above) --------
+    function inDays(n) {
+      var d = new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
+      return d.toISOString();
+    }
+    var sampleInterviews = [
+      [uuid_(), candIds.arjun,   'HR',        'priya.hr@example.com',      daysAgo(35), 'Completed', 'Excellent communication, strong hospitality fit.', 9],
+      [uuid_(), candIds.arjun,   'Manager',   'rahul.manager@example.com', daysAgo(30), 'Completed', 'Recommended for selection.',                       9],
+      [uuid_(), candIds.meera,   'HR',        'priya.hr@example.com',      daysAgo(20), 'Completed', 'Solid housekeeping experience.',                   8],
+      [uuid_(), candIds.meera,   'Manager',   'rahul.manager@example.com', daysAgo(15), 'Completed', 'Awaiting reference check.',                        7],
+      [uuid_(), candIds.sandeep, 'Technical', 'anita.chef@example.com',    daysAgo(10), 'Completed', 'Good knife skills, needs training in plating.',     7],
+      [uuid_(), candIds.rohit,   'HR',        'priya.hr@example.com',      daysAgo(32), 'Completed', 'Did not meet salary expectations.',                 5],
+      [uuid_(), candIds.kiran,   'HR',        'priya.hr@example.com',      daysAgo(14), 'Completed', 'Polite, organized.',                                8],
+      [uuid_(), candIds.kiran,   'Manager',   'rahul.manager@example.com', daysAgo(12), 'Completed', 'Shortlisted pending manager approval.',             8],
+      [uuid_(), candIds.farhan,  'Technical', 'anita.chef@example.com',    inDays(2),   'Scheduled', '',                                                  ''],
+      [uuid_(), candIds.sneha,   'HR',        'priya.hr@example.com',      inDays(3),   'Scheduled', '',                                                  '']
+    ];
+    ivSheet.getRange(ivSheet.getLastRow() + 1, 1, sampleInterviews.length, 8)
+           .setValues(sampleInterviews);
+
+    // -------- Sample Status History --------
+    var sampleHistory = [
+      [uuid_(), candIds.arjun,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(38)],
+      [uuid_(), candIds.arjun,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(30)],
+      [uuid_(), candIds.arjun,   'Interviewed',  'Selected',     adminEmail,             daysAgo(28)],
+      [uuid_(), candIds.meera,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(22)],
+      [uuid_(), candIds.meera,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(15)],
+      [uuid_(), candIds.rohit,   'Interviewed',  'Rejected',     'priya.hr@example.com', daysAgo(31)],
+      [uuid_(), candIds.kiran,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(16)],
+      [uuid_(), candIds.kiran,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(12)]
+    ];
+    histSheet.getRange(histSheet.getLastRow() + 1, 1, sampleHistory.length, 6)
+             .setValues(sampleHistory);
+
+    // -------- Audit Log entry --------
+    auditSheet.appendRow([uuid_(), adminEmail, 'initialSetup',
+                          JSON.stringify({ seeded: { users: 4, candidates: 10, interviews: 10 } }),
+                          nowIso_()]);
+
+    return 'Initial setup complete. Sample data seeded.';
+  }
+
+  return 'Initial setup complete. Sheets ready (sample data already present, skipped).';
+}
+
+// ============================================================
 // AUTH / RBAC
 // ============================================================
 function getCurrentUser() {
