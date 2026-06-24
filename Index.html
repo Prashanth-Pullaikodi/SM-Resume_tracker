@@ -127,56 +127,62 @@
 <div id="loader" class="denied">
   <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
   <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v9 (diagnostic)</p>
-  <pre id="debugPanel" style="
-    margin-top: 16px; text-align:left; font-size:.7rem;
-    width: min(90vw, 520px); max-height: 45vh; overflow:auto;
+  <p class="text-muted small mt-2" style="font-size:.7rem">build v10 (diagnostic)</p>
+  <p class="text-muted" style="font-size:.7rem;margin:8px 0 4px">
+    Diagnostic log — triple-click inside the box to select all, then copy:
+  </p>
+  <textarea id="debugPanel" readonly style="
+    width: min(92vw, 560px); height: 45vh; min-height: 240px;
     background:#0b1221; color:#cbd5e1; padding:10px; border-radius:8px;
-    border:1px solid #1e293b; white-space:pre-wrap; line-height: 1.4;"></pre>
-  <div class="d-flex gap-2 mt-2 flex-wrap" style="justify-content:center">
-    <button id="btnCopyDebug" type="button" class="btn btn-sm btn-outline-secondary">Copy log</button>
-    <button id="btnFetchServerLogs" type="button" class="btn btn-sm btn-outline-primary">Server logs</button>
-    <button id="btnHardReset" type="button" class="btn btn-sm btn-outline-danger">Hard reset</button>
-  </div>
+    border:1px solid #1e293b; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size:.7rem; line-height: 1.4; resize: vertical; white-space: pre;"></textarea>
 </div>
 
 <!-- EARLY DIAGNOSTIC — runs BEFORE any external script.
-     If you can see lines here, your browser executed inline JS at all.
-     If this panel stays empty, the issue is the script tag was blocked. -->
+     Writes to the textarea above so you can select+copy with no buttons. -->
 <script>
 (function () {
-  var dbg = document.getElementById('debugPanel');
-  function early(line) {
-    if (dbg) dbg.textContent += '[early] ' + line + '\n';
-  }
-  early('inline script executed at ' + new Date().toISOString());
-  early('userAgent: ' + (navigator.userAgent || '?').slice(0, 80));
-  early('google object: ' + (typeof google));
+  // Centralised line-appender. Works because the textarea exists before this
+  // script runs (it's directly above us in the document).
+  window.__appendDebug = function (line) {
+    var dbg = document.getElementById('debugPanel');
+    if (dbg) {
+      dbg.value += line + '\n';
+      dbg.scrollTop = dbg.scrollHeight;
+    }
+    // Mirror to localStorage so you can recover the log even if the textarea
+    // gets wiped or if the iframe sandbox blocks something:
+    try {
+      var prev = localStorage.getItem('__rrlog') || '';
+      localStorage.setItem('__rrlog', (prev + line + '\n').slice(-20000));
+    } catch (e) {}
+    try { console.log(line); } catch (e) {}
+  };
+
+  // Wipe localStorage log on each fresh page load so it doesn't grow forever.
+  try { localStorage.setItem('__rrlog', ''); } catch (e) {}
+
+  window.__appendDebug('[early] inline script executed at ' + new Date().toISOString());
+  window.__appendDebug('[early] userAgent: ' + (navigator.userAgent || '?').slice(0, 100));
+  window.__appendDebug('[early] google object: ' + (typeof google));
   if (typeof google !== 'undefined' && google.script) {
-    early('google.script.run: ' + (typeof google.script.run));
+    window.__appendDebug('[early] google.script.run: ' + (typeof google.script.run));
   }
-  // Unregister any stale service worker BEFORE any other script runs.
+
+  // Unregister any stale service worker so we never serve cached HTML.
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(function (regs) {
-      if (regs.length) early('unregistering ' + regs.length + ' stale SW');
+      if (regs.length) window.__appendDebug('[early] unregistering ' + regs.length + ' stale SW');
       regs.forEach(function (r) { r.unregister(); });
     }).catch(function () {});
   }
-  // Surface ANY error globally — even before the main script defines its handlers.
+
+  // Surface any uncaught error globally.
   window.addEventListener('error', function (e) {
-    if (dbg) dbg.textContent += '[early-err] ' + e.message + ' @ ' + e.filename + ':' + e.lineno + '\n';
+    window.__appendDebug('[early-err] ' + (e && e.message) + ' @ ' + (e && e.filename) + ':' + (e && e.lineno));
   });
-  // Wire the "Hard reset" button — works even if the main script fails to load.
-  var hr = document.getElementById('btnHardReset');
-  if (hr) hr.addEventListener('click', function () {
-    early('hard reset clicked');
-    if ('caches' in window) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function (regs) {
-        regs.forEach(function (r) { r.unregister(); });
-        location.reload();
-      });
-    } else location.reload();
+  window.addEventListener('unhandledrejection', function (e) {
+    window.__appendDebug('[early-rej] ' + (e && e.reason && (e.reason.message || String(e.reason))));
   });
 })();
 </script>
@@ -312,18 +318,12 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
 <script>
   // [early2] proves Bootstrap CDN tag did not block subsequent scripts.
-  (function () {
-    var dbg = document.getElementById('debugPanel');
-    if (dbg) dbg.textContent += '[early2] reached main script tag at ' + new Date().toISOString() + '\n';
-  })();
+  window.__appendDebug('[early2] reached main script tag at ' + new Date().toISOString());
 </script>
 <script>
   // [early3] — own standalone block. Tests that a fresh <script> tag
   // after [early2] still executes at all.
-  (function () {
-    var dbg = document.getElementById('debugPanel');
-    if (dbg) dbg.textContent += '[early3] standalone block executed at ' + new Date().toISOString() + '\n';
-  })();
+  window.__appendDebug('[early3] standalone block executed at ' + new Date().toISOString());
 </script>
 <script>
   // [early4] — feature smoke test: template literals, arrow fns, async,
@@ -335,19 +335,14 @@
     const z = { a: 1, b: 2 };
     const { a, ...rest } = z;
     const maybe = (z && z.a) ?? 'fallback';
-    document.getElementById('debugPanel').textContent +=
-      '[early4] modern syntax OK (x=' + x + ', a=' + a + ', maybe=' + maybe + ')\n';
+    window.__appendDebug('[early4] modern syntax OK (x=' + x + ', a=' + a + ', maybe=' + maybe + ')');
   } catch (e) {
-    document.getElementById('debugPanel').textContent +=
-      '[early4] FAIL: ' + (e && e.message) + '\n';
+    window.__appendDebug('[early4] FAIL: ' + (e && e.message));
   }
 </script>
 <script>
-  // [early5] — last marker before the main body. If you see this but
-  // NOT the main "bootApp() start" line, the issue is INSIDE the main
-  // script body (parse error or sandbox quirk on a large block).
-  document.getElementById('debugPanel').textContent +=
-    '[early5] about to enter main body at ' + new Date().toISOString() + '\n';
+  // [early5] — last marker before the main body.
+  window.__appendDebug('[early5] about to enter main body at ' + new Date().toISOString());
 </script>
 <script>
 // [early3] marker — runs before anything else in the main script.
@@ -381,63 +376,24 @@ function dlog(msg, obj) {
   const t = ((Date.now() - tBoot) / 1000).toFixed(2);
   const line = `[${t}s] CLIENT ${msg}` + (obj !== undefined ? ' ' + safeJson(obj) : '');
   debugLines.push(line);
-  paintDebug();
-  try { console.log(line); } catch (e) {}
-}
-function paintDebug() {
-  const el = document.getElementById('debugPanel');
-  if (el) el.textContent = debugLines.slice(-60).join('\n');
+  // Use the shared appender so it lands in the textarea AND localStorage.
+  if (typeof window.__appendDebug === 'function') window.__appendDebug(line);
+  else { try { console.log(line); } catch (e) {} }
 }
 function safeJson(x) {
   try { return JSON.stringify(x); } catch (e) { return String(x); }
 }
 
-// Make sure copyDebug is always reachable from inline onclick (Apps Script
-// IFRAME sandbox sometimes evaluates onclick before the script body runs).
-window.copyDebug = function copyDebug() {
-  const text = debugLines.join('\n');
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text).then(
-      () => alert('Debug log copied to clipboard.'),
-      () => fallbackCopy(text)
-    );
-  } else fallbackCopy(text);
-};
+// Pull server-side logs into the textarea on demand (no UI button — call
+// from the DevTools console if needed: window.fetchServerLogs()).
 window.fetchServerLogs = async function fetchServerLogs() {
   try {
     const logs = await api('getServerLogs');
-    if (Array.isArray(logs)) {
-      // Merge server lines into the buffer (prefix SERVER, no timestamps replaced).
-      logs.forEach(l => debugLines.push('SERVER ' + l));
-      paintDebug();
-    }
+    if (Array.isArray(logs)) logs.forEach(l => window.__appendDebug('SERVER ' + l));
   } catch (e) {
     dlog('fetchServerLogs failed', { msg: e.message });
   }
 };
-window.clearServerLogsAndRefresh = async function() {
-  try { await api('clearServerLogs'); debugLines.length = 0; paintDebug(); }
-  catch (e) { dlog('clearServerLogs failed', { msg: e.message }); }
-};
-
-function fallbackCopy(text) {
-  const ta = document.createElement('textarea');
-  ta.value = text;
-  ta.setAttribute('readonly', '');
-  ta.style.position = 'absolute'; ta.style.left = '-9999px';
-  document.body.appendChild(ta); ta.select();
-  try { document.execCommand('copy'); alert('Debug log copied.'); }
-  catch (e) { alert('Copy failed: ' + e.message); }
-  finally { ta.remove(); }
-}
-
-// Surface uncaught errors in the loader debug panel.
-window.addEventListener('error', (e) => {
-  dlog('window.error: ' + (e && e.message), { src: e.filename, line: e.lineno });
-});
-window.addEventListener('unhandledrejection', (e) => {
-  dlog('unhandled rejection', { reason: e.reason && (e.reason.message || String(e.reason)) });
-});
 
 // ============================================================
 // API HELPER (wraps google.script.run with promises + logging)
@@ -500,17 +456,7 @@ function showError(msg) {
   showOnly('gate');
 }
 
-function wireDebugButtons() {
-  const b1 = document.getElementById('btnCopyDebug');
-  const b2 = document.getElementById('btnFetchServerLogs');
-  const b3 = document.getElementById('btnClearServerLogs');
-  if (b1) b1.addEventListener('click', window.copyDebug);
-  if (b2) b2.addEventListener('click', window.fetchServerLogs);
-  if (b3) b3.addEventListener('click', window.clearServerLogsAndRefresh);
-}
-
 async function bootApp() {
-  wireDebugButtons();
   dlog('bootApp() start');
   showOnly('loader');
 
