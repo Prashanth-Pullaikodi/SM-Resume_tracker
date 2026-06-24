@@ -1,0 +1,223 @@
+# Resort Recruitment System
+
+Mobile-first Progressive Web App for managing resort recruitment, built on
+Google Apps Script + Google Sheets with role-based access control.
+
+## Architecture
+
+```
+┌─────────────────────────────┐
+│  Index.html (SPA + PWA)     │  ← Bootstrap 5, mobile-first
+│  - Login gate               │
+│  - Dashboard / KPIs         │
+│  - Candidates / Interviews  │
+│  - Analytics + Funnel       │
+└──────────────┬──────────────┘
+               │ google.script.run
+┌──────────────▼──────────────┐
+│  Code.gs (backend)          │
+│  - RBAC (Admin/HR/INT/View) │
+│  - CRUD + analytics         │
+│  - Audit log                │
+└──────────────┬──────────────┘
+               │
+┌──────────────▼──────────────┐
+│  Google Sheets DB           │
+│  Candidates / Interviews    │
+│  StatusHistory / Users      │
+│  AuditLog                   │
+└─────────────────────────────┘
+```
+
+## File List
+
+| File | Purpose |
+|------|---------|
+| `Code.gs` | Apps Script backend (RBAC, CRUD, analytics, serves manifest + SW) |
+| `Index.html` | Single-page mobile-first frontend |
+| `manifest.json` | PWA manifest (standalone hosting reference) |
+| `service-worker.js` | Service worker (standalone hosting reference) |
+| `README.md` | This file |
+
+> When deploying as an Apps Script Web App, the **manifest** and **service worker**
+> are served directly by `Code.gs` via `?page=manifest` and `?page=sw`. The
+> standalone `manifest.json` and `service-worker.js` files are kept for reference
+> and for cases where you mirror the UI on a different host.
+
+---
+
+## 1. Google Sheets Setup
+
+You can either let `setupSheets()` create all sheets automatically, or
+create them by hand.
+
+### Option A — Automatic (recommended)
+
+1. Open Google Drive → New → **Google Sheets**. Name it `Resort Recruitment DB`.
+2. Extensions → **Apps Script** → name the project `Resort Recruitment`.
+3. Paste contents of `Code.gs` into `Code.gs`.
+4. File → New → **HTML** named `Index`, paste contents of `Index.html`.
+5. Save, then in the editor run **`setupSheets`** once.
+   - Grant the requested OAuth scopes.
+   - This creates the 5 sheets with headers and seeds you as the first **Admin**.
+
+### Option B — Manual
+
+Create these 5 sheets with these exact headers in row 1:
+
+**Candidates**
+```
+CandidateID | Name | Phone | Email | RoleApplied | ResumeLink | Source | Status | CreatedAt
+```
+
+**Interviews**
+```
+InterviewID | CandidateID | Round | Interviewer | DateTime | Status | Feedback | Score
+```
+
+**StatusHistory**
+```
+LogID | CandidateID | OldStatus | NewStatus | ChangedBy | Timestamp
+```
+
+**Users**
+```
+UserID | Name | Email | Role
+```
+
+Add at least one row to **Users** with your own email and `Role = Admin`.
+
+**AuditLog**
+```
+LogID | Email | Action | Details | Timestamp
+```
+
+### Allowed values
+
+- **Status**: `New`, `Not Screened`, `Shortlisted`, `Interviewed`, `Selected`, `Rejected`, `On Hold`
+- **Role**: `Admin`, `HR`, `Interviewer`, `Viewer`
+- **Round**: `HR`, `Technical`, `Manager`
+
+---
+
+## 2. Deploy as a Web App
+
+1. In the Apps Script editor click **Deploy → New deployment**.
+2. Select type **Web app**.
+3. Settings:
+   - **Description**: `Resort Recruitment v1`
+   - **Execute as**: **User accessing the web app** (so `Session.getActiveUser()` returns the visitor's email — required for RBAC).
+   - **Who has access**: `Anyone within <your Workspace domain>` (recommended) or `Anyone`.
+4. Click **Deploy**, authorize, then copy the **Web App URL**.
+5. Open the URL on a phone → Chrome → menu → **Install app / Add to Home Screen**.
+
+> ⚠️ If you choose **Execute as: Me**, every user will look like the script
+> owner and RBAC will not work. Always pick **User accessing the web app**.
+
+> ℹ️ Google Apps Script Web Apps serve content from a `userContent.google.com`
+> sandbox iframe. Browser support for service workers in that sandbox is
+> limited; the app falls back gracefully to online-only when SW isn't allowed.
+> The PWA manifest, "Add to Home Screen", responsive layout, and bottom
+> navigation still work.
+
+---
+
+## 3. RBAC Matrix
+
+| Capability | Admin | HR | Interviewer | Viewer |
+|-----------|:-----:|:--:|:-----------:|:------:|
+| View dashboard | ✓ | ✓ | ✓ (assigned only) | ✓ |
+| Add / edit candidates | ✓ | ✓ | — | — |
+| Schedule interviews | ✓ | ✓ | — | — |
+| Update candidate status | ✓ | ✓ | — | — |
+| Add interview feedback | ✓ | ✓ | ✓ (own only) | — |
+| Manage users | ✓ | — | — | — |
+| Export CSV | ✓ | — | — | — |
+
+- A user not present in the **Users** sheet is blocked with `Access Denied`.
+- All backend mutations call `authorizeUser([...roles])` before running.
+- Interviewers can only see candidates with interviews assigned to their email,
+  and can only edit feedback on their own interviews.
+
+---
+
+## 4. PWA / Mobile
+
+- Manifest is served from `?page=manifest` and linked in `Index.html`.
+- Service worker is served from `?page=sw` and registered on boot.
+- Bottom navigation: Dashboard · Candidates · Interviews · Analytics · Profile.
+- All buttons are touch-friendly; modals are used for Add/Detail/Feedback.
+- Theme color `#0d6efd` (Bootstrap primary).
+
+### Icons
+
+Apps Script can't easily host binary assets, so the manifest references a
+Google-hosted PNG as a fallback. To use custom icons:
+
+1. Upload `icon-192.png` and `icon-512.png` to a public URL (Google Drive
+   public link, GitHub Pages, or your CDN).
+2. Edit `getManifestJson()` in `Code.gs` and replace the `icons[].src` URLs.
+
+---
+
+## 5. Backend API (`google.script.run` callable)
+
+```
+getCurrentUser()                  → { authorized, email, name, role, permissions }
+getUserRole(email)                → "Admin" | "HR" | "Interviewer" | "Viewer" | null
+
+getCandidates()
+getCandidate(id)
+addCandidate(data)                // Admin, HR
+updateCandidate(data)             // Admin, HR
+updateStatus(id, newStatus)       // Admin, HR
+getNotScreenedCandidates()
+
+addInterview(data)                // Admin, HR
+getInterviews()
+getInterviewsByCandidate(id)
+updateInterviewFeedback(data)     // Admin, HR, Interviewer (own only)
+
+getUsers()                        // Admin
+addUser({ Name, Email, Role })    // Admin
+deleteUser(userId)                // Admin
+
+getDashboardKpis()
+getConversionMetrics()
+getRoleWiseStats()
+exportCandidatesCsv()             // Admin
+```
+
+---
+
+## 6. Bonus Features (implemented)
+
+- ✅ Duplicate detection on candidate email / phone
+- ✅ Auto UUID generation (`Utilities.getUuid()`) for all IDs
+- ✅ Audit log (`AuditLog` sheet) for every write action
+- ✅ CSV export (Admin only) via the Profile screen
+- ✅ Status change history in `StatusHistory`
+
+---
+
+## 7. Updating the App
+
+After editing `Code.gs` or `Index.html`:
+
+1. **Deploy → Manage deployments**.
+2. Click ✏️ on the active deployment.
+3. Version: **New version**, then **Deploy**.
+
+The Web App URL stays the same.
+
+---
+
+## 8. Troubleshooting
+
+| Problem | Fix |
+|--------|-----|
+| "Access Denied" for every user | You deployed as **Execute as: Me**. Redeploy as **User accessing the web app**. |
+| "Sheet not found" | Run `setupSheets()` from the Apps Script editor. |
+| Empty dashboard | The Sheets are empty — add a candidate via the **+** button. |
+| Service worker not registering | Apps Script sandbox doesn't allow SW. PWA install + manifest still work. |
+| Locked out of Users sheet | Open the Sheet directly and edit the `Users` row to restore your `Admin` role. |

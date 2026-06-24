@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<base target="_top">
+<meta charset="UTF-8">
+<title>Resort Recruitment</title>
+<link rel="manifest" href="?page=manifest">
+<link rel="apple-touch-icon" href="https://www.gstatic.com/images/branding/product/2x/forms_2020q4_48dp.png">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+<style>
+  :root { --brand: #0d6efd; --brand-dark: #0a58ca; }
+  html, body { height: 100%; }
+  body {
+    background: #f6f8fb;
+    padding-bottom: 80px;
+    -webkit-tap-highlight-color: transparent;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  .app-header {
+    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
+    color: #fff;
+    padding: 18px 16px 14px;
+    border-radius: 0 0 18px 18px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.08);
+    position: sticky; top: 0; z-index: 50;
+  }
+  .app-header h5 { margin: 0; font-weight: 600; }
+  .app-header small { opacity: .85; }
+  .kpi-card {
+    border: none; border-radius: 16px;
+    box-shadow: 0 2px 10px rgba(15,23,42,.06);
+    background: #fff; height: 100%;
+  }
+  .kpi-card .label { font-size: .78rem; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
+  .kpi-card .value { font-size: 1.7rem; font-weight: 700; color: #0f172a; }
+  .kpi-card .icon { font-size: 1.5rem; opacity: .8; }
+  .alert-screen {
+    border-radius: 16px;
+    border: none;
+    background: linear-gradient(135deg,#fff7ed,#ffedd5);
+    color: #9a3412;
+    cursor: pointer;
+  }
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    display: flex; justify-content: space-around;
+    z-index: 100;
+    padding: 6px 0 max(6px, env(safe-area-inset-bottom));
+  }
+  .bottom-nav button {
+    flex: 1; background: none; border: 0;
+    padding: 8px 0; color: #64748b; font-size: .72rem;
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+  }
+  .bottom-nav button.active { color: var(--brand); }
+  .bottom-nav button i { font-size: 1.3rem; }
+  .candidate-row {
+    background: #fff; border-radius: 14px; padding: 12px 14px;
+    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.04);
+    display: flex; gap: 10px; align-items: flex-start;
+  }
+  .badge-status { font-size: .68rem; padding: 4px 8px; border-radius: 999px; }
+  .b-New { background: #e0f2fe; color: #075985; }
+  .b-NotScreened { background: #fef3c7; color: #92400e; }
+  .b-Shortlisted { background: #e0e7ff; color: #3730a3; }
+  .b-Interviewed { background: #f1f5f9; color: #334155; }
+  .b-Selected { background: #dcfce7; color: #166534; }
+  .b-Rejected { background: #fee2e2; color: #991b1b; }
+  .b-OnHold { background: #f3f4f6; color: #374151; }
+  .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .funnel-bar { background: var(--brand); color: #fff; height: 28px; border-radius: 6px;
+    display: flex; align-items: center; padding: 0 10px; font-size: .8rem; min-width: 60px; }
+  .role-bar { background: #e0e7ff; height: 22px; border-radius: 6px; position: relative; }
+  .role-bar > span { display:block; height:100%; background: var(--brand); border-radius:6px; }
+  .modal-content { border-radius: 18px; }
+  .btn-fab {
+    position: fixed; right: 18px; bottom: 88px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--brand); color: #fff; border: 0;
+    box-shadow: 0 6px 18px rgba(13,110,253,.35);
+    font-size: 1.6rem; z-index: 60;
+  }
+  .skeleton { background: linear-gradient(90deg,#eef2f7,#f8fafc,#eef2f7); background-size: 200% 100%;
+    animation: sk 1.2s infinite; border-radius: 8px; height: 60px; margin-bottom: 8px; }
+  @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .denied {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    flex-direction: column; padding: 30px; text-align: center; color: #475569;
+  }
+  .denied i { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- LOGIN / ACCESS DENIED -->
+<div id="gate" class="denied hidden">
+  <i class="bi bi-shield-exclamation"></i>
+  <h4>Access Denied</h4>
+  <p id="gateMsg" class="text-muted"></p>
+  <button class="btn btn-outline-primary" onclick="bootApp()">Retry</button>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <header class="app-header">
+    <div class="d-flex justify-content-between align-items-center">
+      <div>
+        <h5 id="screenTitle">Dashboard</h5>
+        <small id="userInfo"></small>
+      </div>
+      <button class="btn btn-sm text-white" onclick="refreshAll()"><i class="bi bi-arrow-clockwise"></i></button>
+    </div>
+  </header>
+
+  <main class="container py-3" id="mainArea"></main>
+
+  <button id="fab" class="btn-fab hidden" onclick="openAddCandidateModal()"><i class="bi bi-plus-lg"></i></button>
+
+  <nav class="bottom-nav">
+    <button data-view="dashboard" onclick="navigate('dashboard')"><i class="bi bi-house"></i>Home</button>
+    <button data-view="candidates" onclick="navigate('candidates')"><i class="bi bi-people"></i>Candidates</button>
+    <button data-view="interviews" onclick="navigate('interviews')"><i class="bi bi-calendar-check"></i>Interviews</button>
+    <button data-view="analytics" onclick="navigate('analytics')"><i class="bi bi-graph-up"></i>Analytics</button>
+    <button data-view="profile" onclick="navigate('profile')"><i class="bi bi-person-circle"></i>Profile</button>
+  </nav>
+</div>
+
+<!-- ADD CANDIDATE MODAL -->
+<div class="modal fade" id="candidateModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Add Candidate</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="candidateForm" onsubmit="submitCandidate(event)">
+          <div class="mb-2"><label class="form-label">Name *</label><input class="form-control" name="Name" required></div>
+          <div class="row g-2">
+            <div class="col-6 mb-2"><label class="form-label">Phone</label><input class="form-control" name="Phone"></div>
+            <div class="col-6 mb-2"><label class="form-label">Email</label><input class="form-control" type="email" name="Email"></div>
+          </div>
+          <div class="mb-2"><label class="form-label">Role Applied</label><input class="form-control" name="RoleApplied" placeholder="e.g. Front Desk, Chef"></div>
+          <div class="mb-2"><label class="form-label">Source</label><input class="form-control" name="Source" placeholder="Referral, Naukri, Walk-in"></div>
+          <div class="mb-2"><label class="form-label">Resume Link</label><input class="form-control" name="ResumeLink" placeholder="https://drive.google.com/..."></div>
+          <div class="mb-2"><label class="form-label">Status</label>
+            <select class="form-select" name="Status">
+              <option>New</option><option>Not Screened</option><option>Shortlisted</option>
+            </select>
+          </div>
+          <button class="btn btn-primary w-100 mt-2" type="submit">Save Candidate</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CANDIDATE DETAIL MODAL -->
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Candidate Detail</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+
+<!-- INTERVIEW MODAL -->
+<div class="modal fade" id="interviewModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Schedule Interview</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="interviewForm" onsubmit="submitInterview(event)">
+          <input type="hidden" name="CandidateID">
+          <div class="mb-2"><label class="form-label">Round</label>
+            <select class="form-select" name="Round" required>
+              <option>HR</option><option>Technical</option><option>Manager</option>
+            </select></div>
+          <div class="mb-2"><label class="form-label">Interviewer Email</label><input class="form-control" name="Interviewer" type="email" required></div>
+          <div class="mb-2"><label class="form-label">Date & Time</label><input class="form-control" name="DateTime" type="datetime-local" required></div>
+          <div class="mb-2"><label class="form-label">Status</label>
+            <select class="form-select" name="Status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>
+          <button class="btn btn-primary w-100 mt-2" type="submit">Save Interview</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FEEDBACK MODAL -->
+<div class="modal fade" id="feedbackModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Interview Feedback</h5>
+        <button class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form id="feedbackForm" onsubmit="submitFeedback(event)">
+          <input type="hidden" name="InterviewID">
+          <div class="mb-2"><label class="form-label">Score (1–10)</label>
+            <input class="form-control" name="Score" type="number" min="1" max="10" required></div>
+          <div class="mb-2"><label class="form-label">Status</label>
+            <select class="form-select" name="Status"><option>Completed</option><option>Cancelled</option></select></div>
+          <div class="mb-2"><label class="form-label">Feedback</label>
+            <textarea class="form-control" name="Feedback" rows="4" required></textarea></div>
+          <button class="btn btn-primary w-100" type="submit">Save Feedback</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  user: null,
+  view: 'dashboard',
+  candidates: [],
+  interviews: [],
+  filters: { status: '', q: '' }
+};
+
+// ============================================================
+// API HELPER (wraps google.script.run with promises)
+// ============================================================
+function api(fn, ...args) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(err => reject(err))
+      [fn](...args);
+  });
+}
+
+function toast(msg, type='success') {
+  const t = document.createElement('div');
+  t.className = `position-fixed top-0 start-50 translate-middle-x mt-3 alert alert-${type} shadow`;
+  t.style.zIndex = 9999;
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+async function bootApp() {
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('app').classList.add('hidden');
+  try {
+    const me = await api('getCurrentUser');
+    if (!me.authorized) {
+      document.getElementById('gateMsg').textContent = me.message || 'Access Denied';
+      document.getElementById('gate').classList.remove('hidden');
+      return;
+    }
+    state.user = me;
+    document.getElementById('userInfo').textContent = `${me.name} · ${me.role}`;
+    document.getElementById('app').classList.remove('hidden');
+    applyRoleVisibility();
+    navigate('dashboard');
+    registerSw();
+  } catch (e) {
+    document.getElementById('gateMsg').textContent = (e && e.message) || 'Failed to load.';
+    document.getElementById('gate').classList.remove('hidden');
+  }
+}
+
+function applyRoleVisibility() {
+  const p = state.user.permissions || {};
+  document.getElementById('fab').classList.toggle('hidden', !p.addCandidate);
+}
+
+// ============================================================
+// ROUTER
+// ============================================================
+function navigate(view) {
+  state.view = view;
+  document.querySelectorAll('.bottom-nav button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === view);
+  });
+  document.getElementById('fab').classList.toggle('hidden',
+    view !== 'candidates' || !state.user.permissions.addCandidate);
+  const titles = { dashboard:'Dashboard', candidates:'Candidates', interviews:'Interviews',
+                   analytics:'Analytics', profile:'Profile' };
+  document.getElementById('screenTitle').textContent = titles[view] || '';
+  renderView();
+}
+
+function refreshAll() { renderView(); }
+
+async function renderView() {
+  const m = document.getElementById('mainArea');
+  m.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
+  try {
+    if (state.view === 'dashboard') return renderDashboard(m);
+    if (state.view === 'candidates') return renderCandidates(m);
+    if (state.view === 'interviews') return renderInterviews(m);
+    if (state.view === 'analytics') return renderAnalytics(m);
+    if (state.view === 'profile') return renderProfile(m);
+  } catch (e) {
+    m.innerHTML = `<div class="alert alert-danger">${(e && e.message) || 'Error loading view.'}</div>`;
+  }
+}
+
+// ============================================================
+// DASHBOARD
+// ============================================================
+async function renderDashboard(m) {
+  const kpi = await api('getDashboardKpis');
+  m.innerHTML = `
+    <div class="row g-2 mb-3">
+      ${kpiCard('Total', kpi.total, 'bi-people-fill', '#0d6efd')}
+      ${kpiCard('New', kpi.new, 'bi-stars', '#0ea5e9')}
+      ${kpiCard('Interviewed', kpi.interviewed, 'bi-mic', '#6366f1')}
+      ${kpiCard('Selected', kpi.selected, 'bi-check2-circle', '#16a34a')}
+      ${kpiCard('Rejected', kpi.rejected, 'bi-x-circle', '#dc2626')}
+      ${kpiCard('On Hold', kpi.onHold, 'bi-pause-circle', '#6b7280')}
+    </div>
+    <div class="alert alert-screen mb-3 d-flex justify-content-between align-items-center" onclick="openNotScreened()">
+      <div>
+        <strong>⚠️ Not Screened Candidates</strong>
+        <div class="small">${kpi.notScreened} pending review — tap to view</div>
+      </div>
+      <i class="bi bi-chevron-right"></i>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <button class="btn btn-light flex-grow-1" onclick="navigate('candidates')"><i class="bi bi-people me-1"></i>Candidates</button>
+      <button class="btn btn-light flex-grow-1" onclick="navigate('interviews')"><i class="bi bi-calendar-check me-1"></i>Interviews</button>
+      <button class="btn btn-light flex-grow-1" onclick="navigate('analytics')"><i class="bi bi-graph-up me-1"></i>Analytics</button>
+    </div>
+  `;
+}
+
+function kpiCard(label, val, icon, color) {
+  return `<div class="col-6 col-md-4">
+    <div class="kpi-card p-3 d-flex align-items-center justify-content-between">
+      <div><div class="label">${label}</div><div class="value">${val||0}</div></div>
+      <i class="bi ${icon} icon" style="color:${color}"></i>
+    </div></div>`;
+}
+
+function openNotScreened() {
+  state.filters.status = 'Not Screened';
+  navigate('candidates');
+}
+
+// ============================================================
+// CANDIDATES
+// ============================================================
+async function renderCandidates(m) {
+  state.candidates = await api('getCandidates');
+  m.innerHTML = `
+    <div class="d-flex gap-2 mb-3">
+      <input id="searchInput" class="form-control" placeholder="Search name, role, phone..." value="${state.filters.q||''}" oninput="state.filters.q=this.value; renderCandidateList()">
+      <select id="statusFilter" class="form-select" style="max-width:160px" onchange="state.filters.status=this.value; renderCandidateList()">
+        <option value="">All Status</option>
+        ${['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
+          .map(s=>`<option ${state.filters.status===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>
+    <div id="candList"></div>`;
+  renderCandidateList();
+}
+
+function renderCandidateList() {
+  const q = (state.filters.q || '').toLowerCase();
+  const st = state.filters.status;
+  const list = state.candidates.filter(c => {
+    if (st && c.Status !== st) return false;
+    if (q) {
+      const blob = `${c.Name} ${c.RoleApplied} ${c.Phone} ${c.Email}`.toLowerCase();
+      if (!blob.includes(q)) return false;
+    }
+    return true;
+  });
+  const el = document.getElementById('candList');
+  if (!list.length) { el.innerHTML = '<div class="text-center text-muted py-5">No candidates.</div>'; return; }
+  el.innerHTML = list.map(c => `
+    <div class="candidate-row" onclick="openCandidate('${c.CandidateID}')">
+      <div class="flex-grow-1">
+        <div class="d-flex justify-content-between">
+          <strong>${escapeHtml(c.Name)}</strong>
+          <span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status||''}</span>
+        </div>
+        <div class="small text-muted">${escapeHtml(c.RoleApplied||'—')}</div>
+        <div class="small text-muted"><i class="bi bi-telephone"></i> ${escapeHtml(c.Phone||'—')} · ${escapeHtml(c.Email||'')}</div>
+      </div>
+    </div>`).join('');
+}
+
+function openAddCandidateModal() {
+  document.getElementById('candidateForm').reset();
+  new bootstrap.Modal('#candidateModal').show();
+}
+
+async function submitCandidate(e) {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  try {
+    await api('addCandidate', fd);
+    bootstrap.Modal.getInstance(document.getElementById('candidateModal')).hide();
+    toast('Candidate saved.');
+    renderView();
+  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
+}
+
+async function openCandidate(id) {
+  const c = await api('getCandidate', id);
+  const interviews = await api('getInterviewsByCandidate', id);
+  const p = state.user.permissions;
+  const statusOpts = ['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
+    .map(s => `<option ${c.Status===s?'selected':''}>${s}</option>`).join('');
+  const body = `
+    <h5>${escapeHtml(c.Name)}</h5>
+    <div class="text-muted small mb-2">${escapeHtml(c.RoleApplied||'')}</div>
+    <p class="mb-1"><i class="bi bi-telephone"></i> ${escapeHtml(c.Phone||'—')}</p>
+    <p class="mb-1"><i class="bi bi-envelope"></i> ${escapeHtml(c.Email||'—')}</p>
+    <p class="mb-1"><i class="bi bi-link-45deg"></i>
+      ${c.ResumeLink ? `<a href="${encodeURI(c.ResumeLink)}" target="_blank">View Resume</a>` : '—'}</p>
+    <p class="mb-3"><span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status}</span></p>
+
+    ${p.changeStatus ? `
+      <div class="mb-3">
+        <label class="form-label">Update Status</label>
+        <div class="d-flex gap-2">
+          <select id="statusSelect" class="form-select">${statusOpts}</select>
+          <button class="btn btn-primary" onclick="changeStatus('${c.CandidateID}')">Save</button>
+        </div>
+      </div>` : ''}
+
+    ${p.scheduleInterview ? `
+      <button class="btn btn-outline-primary mb-3" onclick="openInterviewModal('${c.CandidateID}')">
+        <i class="bi bi-calendar-plus"></i> Schedule Interview
+      </button>` : ''}
+
+    <h6>Interview History</h6>
+    ${interviews.length ? interviews.map(i => `
+      <div class="border rounded p-2 mb-2">
+        <div class="d-flex justify-content-between">
+          <strong>${escapeHtml(i.Round)}</strong>
+          <span class="small text-muted">${formatDate(i.DateTime)}</span>
+        </div>
+        <div class="small">Interviewer: ${escapeHtml(i.Interviewer||'—')}</div>
+        <div class="small">Status: ${escapeHtml(i.Status||'—')} · Score: ${i.Score||'—'}</div>
+        ${i.Feedback ? `<div class="small mt-1">${escapeHtml(i.Feedback)}</div>` : ''}
+        ${p.addFeedback ? `<button class="btn btn-sm btn-outline-secondary mt-1" onclick="openFeedbackModal('${i.InterviewID}','${escapeAttr(i.Feedback||'')}','${i.Score||''}','${i.Status||''}')">Add/Edit Feedback</button>` : ''}
+      </div>`).join('') : '<div class="text-muted small">No interviews yet.</div>'}
+  `;
+  document.getElementById('detailBody').innerHTML = body;
+  new bootstrap.Modal('#detailModal').show();
+}
+
+async function changeStatus(id) {
+  const v = document.getElementById('statusSelect').value;
+  try {
+    await api('updateStatus', id, v);
+    toast('Status updated.');
+    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
+    renderView();
+  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
+}
+
+// ============================================================
+// INTERVIEWS
+// ============================================================
+async function renderInterviews(m) {
+  state.interviews = await api('getInterviews');
+  if (!state.interviews.length) {
+    m.innerHTML = '<div class="text-center text-muted py-5">No interviews scheduled.</div>';
+    return;
+  }
+  m.innerHTML = state.interviews
+    .sort((a,b)=> new Date(b.DateTime) - new Date(a.DateTime))
+    .map(i => `
+      <div class="candidate-row">
+        <div class="flex-grow-1">
+          <div class="d-flex justify-content-between">
+            <strong>${escapeHtml(i.Round)} Interview</strong>
+            <span class="small text-muted">${formatDate(i.DateTime)}</span>
+          </div>
+          <div class="small text-muted">Candidate: ${escapeHtml(i.CandidateID)}</div>
+          <div class="small">Interviewer: ${escapeHtml(i.Interviewer||'—')} · Status: ${escapeHtml(i.Status||'—')}</div>
+          ${i.Feedback ? `<div class="small mt-1 fst-italic">${escapeHtml(i.Feedback)}</div>` : ''}
+          ${state.user.permissions.addFeedback ? `
+            <button class="btn btn-sm btn-outline-primary mt-2" onclick="openFeedbackModal('${i.InterviewID}','${escapeAttr(i.Feedback||'')}','${i.Score||''}','${i.Status||''}')">
+              <i class="bi bi-pencil"></i> Feedback
+            </button>` : ''}
+        </div>
+      </div>`).join('');
+}
+
+function openInterviewModal(candidateId) {
+  const f = document.getElementById('interviewForm');
+  f.reset();
+  f.CandidateID.value = candidateId;
+  new bootstrap.Modal('#interviewModal').show();
+}
+
+async function submitInterview(e) {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  try {
+    await api('addInterview', fd);
+    bootstrap.Modal.getInstance(document.getElementById('interviewModal')).hide();
+    toast('Interview scheduled.');
+  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
+}
+
+function openFeedbackModal(id, feedback, score, status) {
+  const f = document.getElementById('feedbackForm');
+  f.reset();
+  f.InterviewID.value = id;
+  f.Feedback.value = feedback || '';
+  f.Score.value = score || '';
+  if (status) f.Status.value = status;
+  // Close any other modal first
+  const detail = bootstrap.Modal.getInstance(document.getElementById('detailModal'));
+  if (detail) detail.hide();
+  new bootstrap.Modal('#feedbackModal').show();
+}
+
+async function submitFeedback(e) {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  try {
+    await api('updateInterviewFeedback', fd);
+    bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
+    toast('Feedback saved.');
+    renderView();
+  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
+}
+
+// ============================================================
+// ANALYTICS
+// ============================================================
+async function renderAnalytics(m) {
+  const [metrics, roleStats] = await Promise.all([
+    api('getConversionMetrics'), api('getRoleWiseStats')
+  ]);
+  const fn = metrics.funnel;
+  const max = Math.max(fn.new, 1);
+  const w = v => Math.max(8, Math.round((v / max) * 100));
+
+  const maxRole = Math.max(1, ...roleStats.map(r => r.total));
+  m.innerHTML = `
+    <div class="row g-2 mb-3">
+      ${kpiCard('Screening Rate', metrics.screeningRate + '%', 'bi-funnel', '#0ea5e9')}
+      ${kpiCard('Interview→Sel', metrics.interviewConversionRate + '%', 'bi-trophy', '#16a34a')}
+      ${kpiCard('Rejection Rate', metrics.rejectionRate + '%', 'bi-x-octagon', '#dc2626')}
+    </div>
+
+    <div class="kpi-card p-3 mb-3">
+      <div class="label mb-2">Hiring Funnel</div>
+      <div class="funnel-row"><span style="width:90px" class="small text-muted">New</span>
+        <div class="funnel-bar" style="width:${w(fn.new)}%">${fn.new}</div></div>
+      <div class="funnel-row"><span style="width:90px" class="small text-muted">Screened</span>
+        <div class="funnel-bar" style="width:${w(fn.screened)}%;background:#6366f1">${fn.screened}</div></div>
+      <div class="funnel-row"><span style="width:90px" class="small text-muted">Interviewed</span>
+        <div class="funnel-bar" style="width:${w(fn.interviewed)}%;background:#8b5cf6">${fn.interviewed}</div></div>
+      <div class="funnel-row"><span style="width:90px" class="small text-muted">Selected</span>
+        <div class="funnel-bar" style="width:${w(fn.selected)}%;background:#16a34a">${fn.selected}</div></div>
+    </div>
+
+    <div class="kpi-card p-3">
+      <div class="label mb-2">Role vs Selected</div>
+      ${roleStats.length ? roleStats.map(r => `
+        <div class="mb-2">
+          <div class="d-flex justify-content-between small">
+            <span>${escapeHtml(r.role)}</span>
+            <span>${r.selected}/${r.total} selected</span>
+          </div>
+          <div class="role-bar"><span style="width:${Math.round((r.selected/r.total||0)*100)}%"></span></div>
+        </div>`).join('') : '<div class="text-muted small">No data.</div>'}
+    </div>
+  `;
+}
+
+// ============================================================
+// PROFILE
+// ============================================================
+async function renderProfile(m) {
+  const u = state.user;
+  let extra = '';
+  if (u.permissions.exportCsv) {
+    extra += `<button class="btn btn-outline-primary w-100 mb-2" onclick="exportCsv()"><i class="bi bi-download"></i> Export Candidates CSV</button>`;
+  }
+  if (u.permissions.manageUsers) {
+    extra += `<button class="btn btn-outline-secondary w-100 mb-2" onclick="openUserMgmt()"><i class="bi bi-people-fill"></i> Manage Users</button>`;
+  }
+  m.innerHTML = `
+    <div class="kpi-card p-4 text-center mb-3">
+      <i class="bi bi-person-circle" style="font-size:3rem;color:var(--brand)"></i>
+      <h5 class="mt-2 mb-0">${escapeHtml(u.name)}</h5>
+      <div class="text-muted small">${escapeHtml(u.email)}</div>
+      <span class="badge bg-primary mt-2">${u.role}</span>
+    </div>
+    ${extra}
+    <div class="kpi-card p-3">
+      <div class="label mb-2">Your Permissions</div>
+      ${Object.keys(u.permissions).map(k => `
+        <div class="d-flex justify-content-between small">
+          <span>${k}</span>
+          <span>${u.permissions[k] ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}</span>
+        </div>`).join('')}
+    </div>
+  `;
+}
+
+async function exportCsv() {
+  try {
+    const csv = await api('exportCandidatesCsv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'candidates.csv';
+    a.click();
+  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
+}
+
+async function openUserMgmt() {
+  try {
+    const users = await api('getUsers');
+    const body = `
+      <h6>Add User</h6>
+      <form onsubmit="addUserSubmit(event)" class="mb-3">
+        <div class="row g-2">
+          <div class="col"><input class="form-control" name="Name" placeholder="Name"></div>
+          <div class="col"><input class="form-control" name="Email" type="email" placeholder="Email" required></div>
+          <div class="col"><select class="form-select" name="Role">
+            <option>Admin</option><option>HR</option><option>Interviewer</option><option>Viewer</option>
+          </select></div>
+        </div>
+        <button class="btn btn-primary btn-sm mt-2" type="submit">Add</button>
+      </form>
+      <h6>Existing Users</h6>
+      ${users.map(u => `
+        <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
+          <div class="small">
+            <strong>${escapeHtml(u.Name||'')}</strong> · ${escapeHtml(u.Email)}
+            <span class="badge bg-secondary">${u.Role}</span>
+          </div>
+          <button class="btn btn-sm btn-outline-danger" onclick="removeUser('${u.UserID}')"><i class="bi bi-trash"></i></button>
+        </div>`).join('')}
+    `;
+    document.getElementById('detailBody').innerHTML = body;
+    new bootstrap.Modal('#detailModal').show();
+  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
+}
+
+async function addUserSubmit(e) {
+  e.preventDefault();
+  const fd = Object.fromEntries(new FormData(e.target).entries());
+  try { await api('addUser', fd); toast('User added.'); openUserMgmt(); }
+  catch (err) { toast(err.message || 'Failed.', 'danger'); }
+}
+
+async function removeUser(id) {
+  if (!confirm('Remove this user?')) return;
+  try { await api('deleteUser', id); toast('User removed.'); openUserMgmt(); }
+  catch (e) { toast(e.message || 'Failed.', 'danger'); }
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
+function formatDate(d) {
+  if (!d) return '—';
+  const dt = new Date(d);
+  if (isNaN(dt)) return String(d);
+  return dt.toLocaleString();
+}
+
+// ============================================================
+// SERVICE WORKER REGISTRATION (PWA)
+// ============================================================
+function registerSw() {
+  if (!('serviceWorker' in navigator)) return;
+  // Service workers must be on same origin and at scope root - Apps Script serves
+  // the app from script.google.com / userContent.google.com which limits SW reliability,
+  // but we register for browsers that allow it.
+  try {
+    navigator.serviceWorker.register('?page=sw').catch(()=>{});
+  } catch (e) {}
+}
+
+// Initial boot
+bootApp();
+</script>
+</body>
+</html>
