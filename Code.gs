@@ -44,9 +44,7 @@ function doGet(e) {
   return t.evaluate()
     .setTitle('Resort Recruitment')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
-    .addMetaTag('theme-color', '#0d6efd')
-    .addMetaTag('apple-mobile-web-app-capable', 'yes');
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
 }
 
 function include(filename) {
