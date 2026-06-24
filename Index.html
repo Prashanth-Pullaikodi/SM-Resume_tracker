@@ -127,24 +127,59 @@
 <div id="loader" class="denied">
   <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
   <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v6</p>
+  <p class="text-muted small mt-2" style="font-size:.7rem">build v7</p>
   <pre id="debugPanel" style="
     margin-top: 16px; text-align:left; font-size:.7rem;
     width: min(90vw, 520px); max-height: 45vh; overflow:auto;
     background:#0b1221; color:#cbd5e1; padding:10px; border-radius:8px;
     border:1px solid #1e293b; white-space:pre-wrap; line-height: 1.4;"></pre>
   <div class="d-flex gap-2 mt-2 flex-wrap" style="justify-content:center">
-    <button id="btnCopyDebug" type="button" class="btn btn-sm btn-outline-secondary">
-      <i class="bi bi-clipboard"></i> Copy log
-    </button>
-    <button id="btnFetchServerLogs" type="button" class="btn btn-sm btn-outline-primary">
-      <i class="bi bi-cloud-download"></i> Show server logs
-    </button>
-    <button id="btnClearServerLogs" type="button" class="btn btn-sm btn-outline-danger">
-      <i class="bi bi-trash"></i> Clear server logs
-    </button>
+    <button id="btnCopyDebug" type="button" class="btn btn-sm btn-outline-secondary">Copy log</button>
+    <button id="btnFetchServerLogs" type="button" class="btn btn-sm btn-outline-primary">Server logs</button>
+    <button id="btnHardReset" type="button" class="btn btn-sm btn-outline-danger">Hard reset</button>
   </div>
 </div>
+
+<!-- EARLY DIAGNOSTIC — runs BEFORE any external script.
+     If you can see lines here, your browser executed inline JS at all.
+     If this panel stays empty, the issue is the script tag was blocked. -->
+<script>
+(function () {
+  var dbg = document.getElementById('debugPanel');
+  function early(line) {
+    if (dbg) dbg.textContent += '[early] ' + line + '\n';
+  }
+  early('inline script executed at ' + new Date().toISOString());
+  early('userAgent: ' + (navigator.userAgent || '?').slice(0, 80));
+  early('google object: ' + (typeof google));
+  if (typeof google !== 'undefined' && google.script) {
+    early('google.script.run: ' + (typeof google.script.run));
+  }
+  // Unregister any stale service worker BEFORE any other script runs.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(function (regs) {
+      if (regs.length) early('unregistering ' + regs.length + ' stale SW');
+      regs.forEach(function (r) { r.unregister(); });
+    }).catch(function () {});
+  }
+  // Surface ANY error globally — even before the main script defines its handlers.
+  window.addEventListener('error', function (e) {
+    if (dbg) dbg.textContent += '[early-err] ' + e.message + ' @ ' + e.filename + ':' + e.lineno + '\n';
+  });
+  // Wire the "Hard reset" button — works even if the main script fails to load.
+  var hr = document.getElementById('btnHardReset');
+  if (hr) hr.addEventListener('click', function () {
+    early('hard reset clicked');
+    if ('caches' in window) caches.keys().then(function (ks) { ks.forEach(function (k) { caches.delete(k); }); });
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function (regs) {
+        regs.forEach(function (r) { r.unregister(); });
+        location.reload();
+      });
+    } else location.reload();
+  });
+})();
+</script>
 
 <!-- LOGIN / ACCESS DENIED -->
 <div id="gate" class="denied hidden">
@@ -361,6 +396,10 @@ window.addEventListener('unhandledrejection', (e) => {
 
 // ============================================================
 // API HELPER (wraps google.script.run with promises + logging)
+// CRITICAL: google.script.run is a Proxy. You CANNOT introspect it
+// (no `typeof runner[fn] === 'function'` checks — they break things).
+// Just invoke the property; if it doesn't exist server-side, the
+// failure handler fires with a clear error message.
 // ============================================================
 function api(fn, ...args) {
   return new Promise((resolve, reject) => {
@@ -369,31 +408,22 @@ function api(fn, ...args) {
 
     if (typeof google === 'undefined' || !google.script || !google.script.run) {
       const err = new Error('google.script.run is not available. Open the Web App URL (not the file preview).');
-      dlog('api ✖ ' + fn + ' — no runtime', { msg: err.message });
-      reject(err); return;
-    }
-
-    let runner = google.script.run
-      .withSuccessHandler((res) => {
-        dlog('api ✔ ' + fn + ' (' + (Date.now() - callStart) + 'ms)');
-        resolve(res);
-      })
-      .withFailureHandler((err) => {
-        dlog('api ✖ ' + fn + ' (' + (Date.now() - callStart) + 'ms)', {
-          msg: err && (err.message || String(err))
-        });
-        reject(err instanceof Error ? err : new Error(err && err.message ? err.message : String(err)));
-      });
-
-    const target = runner[fn];
-    if (typeof target !== 'function') {
-      const err = new Error('Backend function "' + fn + '" not found. Did you paste the latest Code.gs and Save?');
-      dlog('api ✖ ' + fn + ' — not on backend');
+      dlog('api ✖ ' + fn + ' — no runtime');
       reject(err); return;
     }
 
     try {
-      target.apply(runner, args);
+      google.script.run
+        .withSuccessHandler((res) => {
+          dlog('api ✔ ' + fn + ' (' + (Date.now() - callStart) + 'ms)');
+          resolve(res);
+        })
+        .withFailureHandler((err) => {
+          dlog('api ✖ ' + fn + ' (' + (Date.now() - callStart) + 'ms)', {
+            msg: err && (err.message || String(err))
+          });
+          reject(err instanceof Error ? err : new Error(err && err.message ? err.message : String(err)));
+        })[fn](...args);
     } catch (e) {
       dlog('api ✖ ' + fn + ' threw synchronously', { msg: e.message });
       reject(e);
@@ -1140,12 +1170,15 @@ function formatDate(d) {
 // SERVICE WORKER REGISTRATION (PWA)
 // ============================================================
 function registerSw() {
+  // Service worker registration intentionally disabled.
+  // Apps Script's userContent.google.com sandbox makes SW behavior
+  // unreliable and previously cached responses can mask new deploys.
+  // If a SW from an earlier build is still active, kill it.
   if (!('serviceWorker' in navigator)) return;
-  // Service workers must be on same origin and at scope root - Apps Script serves
-  // the app from script.google.com / userContent.google.com which limits SW reliability,
-  // but we register for browsers that allow it.
   try {
-    navigator.serviceWorker.register('?page=sw').catch(()=>{});
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(r => r.unregister());
+    }).catch(() => {});
   } catch (e) {}
 }
 
