@@ -127,7 +127,16 @@
 <div id="loader" class="denied">
   <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
   <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v3</p>
+  <p class="text-muted small mt-2" style="font-size:.7rem">build v4</p>
+  <pre id="debugPanel" style="
+    margin-top: 16px; text-align:left; font-size:.7rem;
+    width: min(90vw, 480px); max-height: 40vh; overflow:auto;
+    background:#f8fafc; padding:10px; border-radius:8px;
+    border:1px solid #e5e7eb; color:#475569; white-space:pre-wrap;
+    line-height: 1.4;"></pre>
+  <button class="btn btn-sm btn-outline-secondary mt-2" onclick="copyDebug()">
+    <i class="bi bi-clipboard"></i> Copy debug log
+  </button>
 </div>
 
 <!-- LOGIN / ACCESS DENIED -->
@@ -277,14 +286,85 @@ const state = {
 };
 
 // ============================================================
-// API HELPER (wraps google.script.run with promises)
+// VISIBLE DEBUG LOG
+// ============================================================
+const debugLines = [];
+const t0 = Date.now();
+function dlog(msg, obj) {
+  const t = ((Date.now() - t0) / 1000).toFixed(2);
+  const line = `[${t}s] ${msg}` + (obj !== undefined ? ' ' + safeJson(obj) : '');
+  debugLines.push(line);
+  const el = document.getElementById('debugPanel');
+  if (el) el.textContent = debugLines.slice(-40).join('\n');
+  try { console.log(line); } catch (e) {}
+}
+function safeJson(x) {
+  try { return JSON.stringify(x); } catch (e) { return String(x); }
+}
+function copyDebug() {
+  const text = debugLines.join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(
+      () => toast('Debug log copied.'),
+      () => fallbackCopy(text)
+    );
+  } else fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand('copy'); toast('Debug log copied.'); }
+  catch (e) { toast('Copy failed.', 'danger'); }
+  finally { ta.remove(); }
+}
+
+// Surface uncaught errors in the loader debug panel.
+window.addEventListener('error', (e) => {
+  dlog('window.error: ' + (e && e.message), { src: e.filename, line: e.lineno });
+});
+window.addEventListener('unhandledrejection', (e) => {
+  dlog('unhandled rejection', { reason: e.reason && (e.reason.message || String(e.reason)) });
+});
+
+// ============================================================
+// API HELPER (wraps google.script.run with promises + logging)
 // ============================================================
 function api(fn, ...args) {
   return new Promise((resolve, reject) => {
-    google.script.run
-      .withSuccessHandler(resolve)
-      .withFailureHandler(err => reject(err))
-      [fn](...args);
+    dlog('api ▶ ' + fn);
+    const callStart = Date.now();
+
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      const err = new Error('google.script.run is not available. Open the Web App URL (not the file preview).');
+      dlog('api ✖ ' + fn + ' — no runtime', { msg: err.message });
+      reject(err); return;
+    }
+
+    let runner = google.script.run
+      .withSuccessHandler((res) => {
+        dlog('api ✔ ' + fn + ' (' + (Date.now() - callStart) + 'ms)');
+        resolve(res);
+      })
+      .withFailureHandler((err) => {
+        dlog('api ✖ ' + fn + ' (' + (Date.now() - callStart) + 'ms)', {
+          msg: err && (err.message || String(err))
+        });
+        reject(err instanceof Error ? err : new Error(err && err.message ? err.message : String(err)));
+      });
+
+    const target = runner[fn];
+    if (typeof target !== 'function') {
+      const err = new Error('Backend function "' + fn + '" not found. Did you paste the latest Code.gs and Save?');
+      dlog('api ✖ ' + fn + ' — not on backend');
+      reject(err); return;
+    }
+
+    try {
+      target.apply(runner, args);
+    } catch (e) {
+      dlog('api ✖ ' + fn + ' threw synchronously', { msg: e.message });
+      reject(e);
+    }
   });
 }
 
@@ -313,46 +393,69 @@ function showError(msg) {
 }
 
 async function bootApp() {
+  dlog('bootApp() start');
   showOnly('loader');
 
-  // Defensive: google.script.run only exists when served via Apps Script.
   if (typeof google === 'undefined' || !google.script || !google.script.run) {
     showError('This page must be opened via the Apps Script Web App URL.');
     return;
   }
 
-  // Hard fallback: if nothing answers in 60s, show a helpful error instead of a blank screen.
-  let settled = false;
-  const timeout = setTimeout(() => {
-    if (!settled) {
-      showError('The server did not respond. Check Apps Script logs, re-run initialSetup, and redeploy.');
-    }
-  }, 60000);
-
+  // Step 1 — ping the bridge to prove the backend is reachable at all.
+  // This is a tiny call (no sheet reads) so it should return in < 500 ms.
   try {
-    const boot = await api('bootstrapApp');
-    settled = true;
-    clearTimeout(timeout);
-
-    if (!boot || !boot.user) {
-      showError('Empty response from server. Open Apps Script → Executions to see the error.');
-      return;
-    }
-    if (!boot.user.authorized) {
-      showError(boot.user.message || 'Access Denied');
-      return;
-    }
-    applyBoot(boot);
-    document.getElementById('userInfo').textContent = `${state.user.name} · ${state.user.role}`;
-    showOnly('app');
-    applyRoleVisibility();
-    navigate('dashboard');
-    registerSw();
+    dlog('step 1/2: ping()');
+    const pong = await withTimeout(api('ping'), 20000, 'ping');
+    dlog('ping result', pong);
   } catch (e) {
-    settled = true;
-    clearTimeout(timeout);
-    showError((e && (e.message || e.toString())) || 'Failed to load.');
+    showError('Backend unreachable on ping(): ' + (e && e.message) +
+              '. Open Apps Script → Executions to see the server error.');
+    return;
   }
+
+  // Step 2 — bootstrap the full payload.
+  let boot;
+  try {
+    dlog('step 2/2: bootstrapApp()');
+    boot = await withTimeout(api('bootstrapApp'), 45000, 'bootstrapApp');
+  } catch (e) {
+    showError('bootstrapApp failed: ' + (e && e.message) +
+              '. Try running pingBootstrap() from the editor.');
+    return;
+  }
+
+  if (!boot || !boot.user) {
+    showError('Empty bootstrap response. Re-paste Code.gs into the editor, Save, then redeploy.');
+    return;
+  }
+  if (!boot.user.authorized) {
+    showError(boot.user.message || 'Access Denied');
+    return;
+  }
+
+  dlog('bootstrap ok', {
+    cached: !!boot.cached,
+    candidates: boot.candidates ? boot.candidates.length : 0,
+    interviews: boot.interviews ? boot.interviews.length : 0
+  });
+
+  applyBoot(boot);
+  document.getElementById('userInfo').textContent = `${state.user.name} · ${state.user.role}`;
+  showOnly('app');
+  applyRoleVisibility();
+  navigate('dashboard');
+  registerSw();
+}
+
+// Reject with a clear message if a promise doesn't settle in time.
+function withTimeout(p, ms, label) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => {
+      reject(new Error(label + ' did not respond in ' + (ms/1000) + 's.'));
+    }, ms);
+    p.then(v => { clearTimeout(t); resolve(v); },
+           e => { clearTimeout(t); reject(e); });
+  });
 }
 
 function applyBoot(boot) {
