@@ -150,7 +150,13 @@
           </div>
           <div class="mb-2"><label class="form-label">Role Applied</label><input class="form-control" name="RoleApplied" placeholder="e.g. Front Desk, Chef"></div>
           <div class="mb-2"><label class="form-label">Source</label><input class="form-control" name="Source" placeholder="Referral, Naukri, Walk-in"></div>
-          <div class="mb-2"><label class="form-label">Resume Link</label><input class="form-control" name="ResumeLink" placeholder="https://drive.google.com/..."></div>
+          <div class="mb-2"><label class="form-label">Resume Link <span class="text-muted small">(optional)</span></label>
+            <input class="form-control" name="ResumeLink" placeholder="https://drive.google.com/..."></div>
+          <div class="mb-2"><label class="form-label">Upload Resume <span class="text-muted small">(PDF, DOC, image — max 25 MB)</span></label>
+            <input class="form-control" type="file" name="ResumeFile" id="newResumeFile"
+                   accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
+            <div class="form-text">If both link and file are provided, the uploaded file wins.</div>
+          </div>
           <div class="mb-2"><label class="form-label">Status</label>
             <select class="form-select" name="Status">
               <option>New</option><option>Not Screened</option><option>Shortlisted</option>
@@ -411,13 +417,55 @@ function openAddCandidateModal() {
 
 async function submitCandidate(e) {
   e.preventDefault();
-  const fd = Object.fromEntries(new FormData(e.target).entries());
+  const form = e.target;
+  const fd = Object.fromEntries(new FormData(form).entries());
+  delete fd.ResumeFile; // file is handled separately as base64
+
+  const fileInput = document.getElementById('newResumeFile');
+  const btn = form.querySelector('button[type="submit"]');
+  const originalLabel = btn.innerHTML;
+
   try {
+    if (fileInput && fileInput.files && fileInput.files[0]) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading resume...';
+      fd.ResumeUpload = await fileToUploadPayload(fileInput.files[0]);
+    } else {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
+    }
     await api('addCandidate', fd);
     bootstrap.Modal.getInstance(document.getElementById('candidateModal')).hide();
     toast('Candidate saved.');
     renderView();
-  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
+  } catch (err) {
+    toast(err.message || 'Failed.', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalLabel;
+  }
+}
+
+// Read a File as { fileName, mimeType, base64 }. Rejects files over the limit.
+function fileToUploadPayload(file) {
+  const MAX = 25 * 1024 * 1024;
+  if (file.size > MAX) {
+    return Promise.reject(new Error('File too large. Limit is 25 MB.'));
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file.'));
+    reader.onload = () => {
+      const result = reader.result || '';
+      const b64 = String(result).split(',')[1] || '';
+      resolve({
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        base64: b64
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 async function openCandidate(id) {
@@ -432,8 +480,23 @@ async function openCandidate(id) {
     <p class="mb-1"><i class="bi bi-telephone"></i> ${escapeHtml(c.Phone||'—')}</p>
     <p class="mb-1"><i class="bi bi-envelope"></i> ${escapeHtml(c.Email||'—')}</p>
     <p class="mb-1"><i class="bi bi-link-45deg"></i>
-      ${c.ResumeLink ? `<a href="${encodeURI(c.ResumeLink)}" target="_blank">View Resume</a>` : '—'}</p>
+      <span id="resumeLinkArea">
+        ${c.ResumeLink ? `<a href="${encodeURI(c.ResumeLink)}" target="_blank">View Resume</a>` : '—'}
+      </span>
+    </p>
     <p class="mb-3"><span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status}</span></p>
+
+    ${p.editCandidate ? `
+      <div class="mb-3">
+        <label class="form-label">${c.ResumeLink ? 'Replace' : 'Upload'} Resume <span class="text-muted small">(any format, max 25 MB)</span></label>
+        <div class="d-flex gap-2">
+          <input type="file" class="form-control" id="resumeUploadInput"
+                 accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
+          <button class="btn btn-primary" id="resumeUploadBtn" onclick="uploadResume('${c.CandidateID}')">
+            <i class="bi bi-cloud-upload"></i>
+          </button>
+        </div>
+      </div>` : ''}
 
     ${p.changeStatus ? `
       <div class="mb-3">
@@ -474,6 +537,33 @@ async function changeStatus(id) {
     bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
     renderView();
   } catch (e) { toast(e.message || 'Failed.', 'danger'); }
+}
+
+async function uploadResume(candidateId) {
+  const input = document.getElementById('resumeUploadInput');
+  const btn = document.getElementById('resumeUploadBtn');
+  if (!input || !input.files || !input.files[0]) {
+    toast('Choose a file first.', 'warning');
+    return;
+  }
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+  try {
+    const payload = await fileToUploadPayload(input.files[0]);
+    const res = await api('uploadResumeForCandidate', candidateId, payload);
+    toast('Resume uploaded.');
+    const area = document.getElementById('resumeLinkArea');
+    if (area && res.ResumeLink) {
+      area.innerHTML = `<a href="${encodeURI(res.ResumeLink)}" target="_blank">View Resume</a>`;
+    }
+    input.value = '';
+  } catch (e) {
+    toast(e.message || 'Upload failed.', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 }
 
 // ============================================================

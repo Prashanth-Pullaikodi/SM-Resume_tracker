@@ -207,6 +207,19 @@ exportCandidatesCsv()             // Admin
 - ✅ Audit log (`AuditLog` sheet) for every write action
 - ✅ CSV export (Admin only) via the Profile screen
 - ✅ Status change history in `StatusHistory`
+- ✅ **Resume upload to Google Drive** — accepts PDF, DOC/DOCX, RTF, TXT,
+  ODT, and images (any MIME type really; the picker is a hint). Files land
+  in a Drive folder named **Resort Recruitment Resumes** (auto-created),
+  are shared with the link, and the URL is written back to the candidate's
+  `ResumeLink` field. Available on the Add Candidate form and on the
+  candidate detail modal. 25 MB cap per file.
+
+### Drive permissions
+
+Uploading triggers an extra OAuth scope (`drive`). The first time you click
+upload after deploying a new version, Apps Script will prompt you to grant
+access. Re-deploy a new version of the Web App so users see the consent
+screen the next time they open the app.
 
 ---
 

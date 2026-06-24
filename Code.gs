@@ -19,7 +19,9 @@ var CONFIG = {
     AUDIT_LOG: 'AuditLog'
   },
   STATUSES: ['New', 'Not Screened', 'Shortlisted', 'Interviewed', 'Selected', 'Rejected', 'On Hold'],
-  ROLES: ['Admin', 'HR', 'Interviewer', 'Viewer']
+  ROLES: ['Admin', 'HR', 'Interviewer', 'Viewer'],
+  RESUMES_FOLDER_NAME: 'Resort Recruitment Resumes',
+  MAX_UPLOAD_BYTES: 25 * 1024 * 1024 // 25 MB hard cap per resume
 };
 
 // ============================================================
@@ -355,13 +357,93 @@ function addCandidate(data) {
 
   var id = uuid_();
   var status = data.Status && CONFIG.STATUSES.indexOf(data.Status) !== -1 ? data.Status : 'New';
+
+  // If a resume payload was attached, save it to Drive and use the URL.
+  var resumeLink = data.ResumeLink || '';
+  if (data.ResumeUpload && data.ResumeUpload.base64 && data.ResumeUpload.fileName) {
+    var saved = saveResumeToDrive_(id, data.Name, data.ResumeUpload);
+    resumeLink = saved.url;
+  }
+
   sheet.appendRow([
     id, data.Name, data.Phone || '', data.Email || '',
-    data.RoleApplied || '', data.ResumeLink || '', data.Source || '',
+    data.RoleApplied || '', resumeLink, data.Source || '',
     status, nowIso_()
   ]);
-  logAudit_(me.email, 'addCandidate', { id: id, name: data.Name });
-  return { ok: true, CandidateID: id };
+  logAudit_(me.email, 'addCandidate', { id: id, name: data.Name, resume: !!resumeLink });
+  return { ok: true, CandidateID: id, ResumeLink: resumeLink };
+}
+
+// ============================================================
+// RESUME UPLOAD → DRIVE
+// ============================================================
+function getOrCreateResumesFolder_() {
+  var folders = DriveApp.getFoldersByName(CONFIG.RESUMES_FOLDER_NAME);
+  if (folders.hasNext()) return folders.next();
+  return DriveApp.createFolder(CONFIG.RESUMES_FOLDER_NAME);
+}
+
+function safeFileName_(name) {
+  return String(name || 'resume').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80);
+}
+
+function saveResumeToDrive_(candidateId, candidateName, upload) {
+  if (!upload || !upload.base64 || !upload.fileName) {
+    throw new Error('Missing resume upload payload.');
+  }
+  // Strip any data: URL prefix the frontend may have included.
+  var b64 = String(upload.base64).replace(/^data:[^;]+;base64,/, '');
+  var bytes;
+  try { bytes = Utilities.base64Decode(b64); }
+  catch (e) { throw new Error('Invalid file data.'); }
+
+  if (bytes.length > CONFIG.MAX_UPLOAD_BYTES) {
+    throw new Error('File too large. Limit is ' +
+      Math.round(CONFIG.MAX_UPLOAD_BYTES / 1024 / 1024) + ' MB.');
+  }
+
+  var mime = upload.mimeType || 'application/octet-stream';
+  var ext = (upload.fileName.match(/\.[^.]+$/) || [''])[0];
+  var clean = safeFileName_(candidateName) + '_' +
+              String(candidateId).slice(0, 8) + '_' +
+              Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss') +
+              ext;
+
+  var blob = Utilities.newBlob(bytes, mime, clean);
+  var folder = getOrCreateResumesFolder_();
+  var file = folder.createFile(blob);
+
+  // Make the file accessible to anyone in the org / with the link.
+  try {
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+  } catch (e) {
+    // Workspace policy may block ANYONE_WITH_LINK; fall back to domain.
+    try {
+      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
+    } catch (e2) { /* keep default sharing */ }
+  }
+
+  return { url: file.getUrl(), id: file.getId(), name: clean };
+}
+
+function uploadResumeForCandidate(candidateId, upload) {
+  var me = authorizeUser(['Admin','HR']);
+  if (!candidateId) throw new Error('CandidateID required.');
+
+  var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
+  var row = findRowByKey_(sheet, 0, candidateId);
+  if (row === -1) throw new Error('Candidate not found.');
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var nameCol = headers.indexOf('Name') + 1;
+  var linkCol = headers.indexOf('ResumeLink') + 1;
+  var candidateName = sheet.getRange(row, nameCol).getValue();
+
+  var saved = saveResumeToDrive_(candidateId, candidateName, upload);
+  sheet.getRange(row, linkCol).setValue(saved.url);
+
+  logAudit_(me.email, 'uploadResume', { id: candidateId, file: saved.name });
+  return { ok: true, ResumeLink: saved.url };
 }
 
 function updateCandidate(data) {
