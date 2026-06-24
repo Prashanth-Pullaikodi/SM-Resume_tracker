@@ -123,6 +123,16 @@
 </head>
 <body>
 
+<!-- LOADER (visible by default; replaces blank flash while bootstrapApp runs) -->
+<div id="loader" class="denied">
+  <div class="spinner-border text-primary mb-3" style="width:3rem;height:3rem"></div>
+  <h5 class="text-muted">Loading Resort Recruitment…</h5>
+  <p class="text-muted small mb-0" id="loaderMsg">Fetching your workspace</p>
+  <p class="text-muted small mt-3" style="max-width:340px">
+    First load after a deploy can take 10–30 seconds while Google Apps Script warms up.
+  </p>
+</div>
+
 <!-- LOGIN / ACCESS DENIED -->
 <div id="gate" class="denied hidden">
   <i class="bi bi-shield-exclamation"></i>
@@ -293,26 +303,58 @@ function toast(msg, type='success') {
 // ============================================================
 // BOOT (single round-trip; caches everything for instant navigation)
 // ============================================================
+function showOnly(id) {
+  ['loader','gate','app'].forEach(x => {
+    const el = document.getElementById(x);
+    if (el) el.classList.toggle('hidden', x !== id);
+  });
+}
+
+function showError(msg) {
+  document.getElementById('gateMsg').textContent = msg || 'Something went wrong.';
+  showOnly('gate');
+}
+
 async function bootApp() {
-  document.getElementById('gate').classList.add('hidden');
-  document.getElementById('app').classList.add('hidden');
+  showOnly('loader');
+
+  // Defensive: google.script.run only exists when served via Apps Script.
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    showError('This page must be opened via the Apps Script Web App URL.');
+    return;
+  }
+
+  // Hard fallback: if nothing answers in 60s, show a helpful error instead of a blank screen.
+  let settled = false;
+  const timeout = setTimeout(() => {
+    if (!settled) {
+      showError('The server did not respond. Check Apps Script logs, re-run initialSetup, and redeploy.');
+    }
+  }, 60000);
+
   try {
     const boot = await api('bootstrapApp');
-    if (!boot.user || !boot.user.authorized) {
-      document.getElementById('gateMsg').textContent =
-        (boot.user && boot.user.message) || 'Access Denied';
-      document.getElementById('gate').classList.remove('hidden');
+    settled = true;
+    clearTimeout(timeout);
+
+    if (!boot || !boot.user) {
+      showError('Empty response from server. Open Apps Script → Executions to see the error.');
+      return;
+    }
+    if (!boot.user.authorized) {
+      showError(boot.user.message || 'Access Denied');
       return;
     }
     applyBoot(boot);
     document.getElementById('userInfo').textContent = `${state.user.name} · ${state.user.role}`;
-    document.getElementById('app').classList.remove('hidden');
+    showOnly('app');
     applyRoleVisibility();
     navigate('dashboard');
     registerSw();
   } catch (e) {
-    document.getElementById('gateMsg').textContent = (e && e.message) || 'Failed to load.';
-    document.getElementById('gate').classList.remove('hidden');
+    settled = true;
+    clearTimeout(timeout);
+    showError((e && (e.message || e.toString())) || 'Failed to load.');
   }
 }
 

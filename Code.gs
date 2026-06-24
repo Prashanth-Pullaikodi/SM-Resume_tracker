@@ -84,7 +84,16 @@ function sheetToObjects_(sheet) {
   var rows = [];
   for (var i = 1; i < values.length; i++) {
     var row = {};
-    for (var j = 0; j < headers.length; j++) row[headers[j]] = values[i][j];
+    for (var j = 0; j < headers.length; j++) {
+      var v = values[i][j];
+      // Coerce Date cells to ISO strings — google.script.run sometimes
+      // serializes Date objects unreliably across the postMessage bridge,
+      // which can result in an empty/undefined response on the client.
+      if (Object.prototype.toString.call(v) === '[object Date]') {
+        v = isNaN(v.getTime()) ? '' : v.toISOString();
+      }
+      row[headers[j]] = v;
+    }
     if (row[headers[0]] === '' || row[headers[0]] === null) continue;
     rows.push(row);
   }
@@ -262,6 +271,22 @@ function initialSetup() {
  * because the frontend no longer needs a separate call per view.
  */
 function bootstrapApp() {
+  try {
+    return bootstrapAppImpl_();
+  } catch (e) {
+    // Surface server-side errors as an authorized=false payload so the
+    // frontend can render a useful message instead of going blank.
+    return {
+      user: {
+        authorized: false,
+        message: 'Server error: ' + (e && e.message ? e.message : e) +
+                 '. Run initialSetup() from the Apps Script editor.'
+      }
+    };
+  }
+}
+
+function bootstrapAppImpl_() {
   var user = getCurrentUser();
   if (!user.authorized) return { user: user };
 
