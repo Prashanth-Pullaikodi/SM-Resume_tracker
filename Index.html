@@ -3,1184 +3,669 @@
 <head>
 <base target="_top">
 <meta charset="UTF-8">
-<meta name="theme-color" content="#0d6efd">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="mobile-web-app-capable" content="yes">
-<title>Resort Recruitment</title>
-<link rel="manifest" href="?page=manifest">
-<link rel="apple-touch-icon" href="https://www.gstatic.com/images/branding/product/2x/forms_2020q4_48dp.png">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.2/font/bootstrap-icons.css" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>SM Recruitment</title>
 <style>
-  :root { --brand: #0d6efd; --brand-dark: #0a58ca; }
-  html, body { height: 100%; }
-  body {
-    background: #f6f8fb;
-    padding-bottom: 80px;
-    -webkit-tap-highlight-color: transparent;
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  :root{
+    --bg:#0b1020; --surface:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e8ecf3;
+    --brand:#6366f1; --brand2:#8b5cf6; --brand3:#22d3ee; --ok:#10b981; --warn:#f59e0b; --bad:#ef4444;
+    --shadow:0 10px 30px rgba(15,23,42,.08); --shadow-lg:0 24px 60px rgba(15,23,42,.16);
+    --radius:18px; --radius-sm:12px;
   }
-  .app-header {
-    background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-    color: #fff;
-    padding: 18px 16px 14px;
-    border-radius: 0 0 18px 18px;
-    box-shadow: 0 4px 14px rgba(0,0,0,.08);
-    position: sticky; top: 0; z-index: 50;
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    color:var(--ink); padding-bottom:92px; font-size:15px; line-height:1.45;
+    font-family:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    background:
+      radial-gradient(1100px 520px at 8% -8%, rgba(99,102,241,.18), transparent 60%),
+      radial-gradient(900px 480px at 108% 4%, rgba(34,211,238,.16), transparent 55%),
+      linear-gradient(180deg,#f6f8fe 0%, #eef1fb 100%);
+    background-attachment:fixed;
   }
-  .app-header h5 { margin: 0; font-weight: 600; }
-  .app-header small { opacity: .85; }
-  .kpi-card {
-    border: none; border-radius: 16px;
-    box-shadow: 0 2px 10px rgba(15,23,42,.06);
-    background: #fff; height: 100%;
-  }
-  .kpi-card .label { font-size: .78rem; color: #64748b; text-transform: uppercase; letter-spacing: .5px; }
-  .kpi-card .value { font-size: 1.7rem; font-weight: 700; color: #0f172a; }
-  .kpi-card .icon { font-size: 1.5rem; opacity: .8; }
-  .alert-screen {
-    border-radius: 16px;
-    border: none;
-    background: linear-gradient(135deg,#fff7ed,#ffedd5);
-    color: #9a3412;
-    cursor: pointer;
-  }
-  .bottom-nav {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    background: #fff;
-    border-top: 1px solid #e5e7eb;
-    display: flex; justify-content: space-around;
-    z-index: 100;
-    padding: 6px 0 max(6px, env(safe-area-inset-bottom));
-  }
-  .bottom-nav button {
-    flex: 1; background: none; border: 0;
-    padding: 8px 0; color: #64748b; font-size: .72rem;
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-  }
-  .bottom-nav button.active { color: var(--brand); }
-  .bottom-nav button i { font-size: 1.3rem; }
-  .candidate-row {
-    background: #fff; border-radius: 14px; padding: 12px 14px;
-    margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,.04);
-    display: flex; gap: 10px; align-items: flex-start;
-  }
-  .badge-status { font-size: .68rem; padding: 4px 8px; border-radius: 999px; }
-  .b-New { background: #e0f2fe; color: #075985; }
-  .b-NotScreened { background: #fef3c7; color: #92400e; }
-  .b-Shortlisted { background: #e0e7ff; color: #3730a3; }
-  .b-Interviewed { background: #f1f5f9; color: #334155; }
-  .b-Selected { background: #dcfce7; color: #166534; }
-  .b-Rejected { background: #fee2e2; color: #991b1b; }
-  .b-OnHold { background: #f3f4f6; color: #374151; }
-  .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-  .funnel-bar { background: var(--brand); color: #fff; height: 28px; border-radius: 6px;
-    display: flex; align-items: center; padding: 0 10px; font-size: .8rem; min-width: 60px; }
-  .role-bar { background: #e0e7ff; height: 22px; border-radius: 6px; position: relative; }
-  .role-bar > span { display:block; height:100%; background: var(--brand); border-radius:6px; }
-  .modal-content { border-radius: 18px; }
-  .btn-fab {
-    position: fixed; right: 18px; bottom: 88px;
-    width: 56px; height: 56px; border-radius: 50%;
-    background: var(--brand); color: #fff; border: 0;
-    box-shadow: 0 6px 18px rgba(13,110,253,.35);
-    font-size: 1.6rem; z-index: 60;
-  }
-  .skeleton { background: linear-gradient(90deg,#eef2f7,#f8fafc,#eef2f7); background-size: 200% 100%;
-    animation: sk 1.2s infinite; border-radius: 8px; height: 60px; margin-bottom: 8px; }
-  @keyframes sk { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
-  .spin { animation: spin 1s linear infinite; display: inline-block; }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .cv-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-  .cv-table th, .cv-table td { padding: 10px 8px; font-size: .85rem; vertical-align: middle; }
-  .cv-table thead th {
-    position: sticky; top: 0; background: #f1f5f9; color: #475569;
-    font-weight: 600; text-transform: uppercase; font-size: .68rem;
-    letter-spacing: .5px; border-bottom: 1px solid #e5e7eb;
-  }
-  .cv-table tbody tr { background: #fff; cursor: pointer; }
-  .cv-table tbody tr:hover { background: #f8fafc; }
-  .cv-table tbody td { border-bottom: 1px solid #f1f5f9; }
-  .chip-row { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 10px; }
-  .chip-row::-webkit-scrollbar { display: none; }
-  .chip {
-    border: 1px solid #e5e7eb; background: #fff; color: #475569;
-    padding: 6px 12px; border-radius: 999px; font-size: .8rem;
-    white-space: nowrap; cursor: pointer;
-  }
-  .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
-  .cv-name { font-weight: 600; color: #0f172a; }
-  .cv-meta { color: #64748b; font-size: .75rem; }
-  .cv-link { color: var(--brand); text-decoration: none; }
-  .denied {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    flex-direction: column; padding: 30px; text-align: center; color: #475569;
-  }
-  .denied i { font-size: 3rem; color: #ef4444; margin-bottom: 12px; }
-  .hidden { display: none !important; }
+  .hidden{display:none !important}
+  ::-webkit-scrollbar{width:8px;height:8px}
+  ::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:8px}
+
+  /* Boot / status screens */
+  .center{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:28px}
+  .logo{width:74px;height:74px;border-radius:22px;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;margin-bottom:16px;
+    box-shadow:0 16px 40px rgba(99,102,241,.45)}
+  .spinner{width:42px;height:42px;border-radius:50%;border:3px solid rgba(99,102,241,.25);border-top-color:var(--brand);animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .muted{color:var(--muted)} .small{font-size:.84rem} .tiny{font-size:.7rem}
+
+  /* Buttons */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;cursor:pointer;border:0;border-radius:12px;
+    padding:11px 18px;font-size:.92rem;font-weight:600;font-family:inherit;color:#fff;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));box-shadow:0 8px 22px rgba(99,102,241,.35);
+    transition:transform .12s ease, box-shadow .12s ease, filter .12s}
+  .btn:hover{filter:brightness(1.05);box-shadow:0 12px 28px rgba(99,102,241,.42)}
+  .btn:active{transform:translateY(1px) scale(.99)}
+  .btn:disabled{opacity:.6;cursor:default;box-shadow:none}
+  .btn-light{background:#fff;color:var(--ink);box-shadow:var(--shadow);border:1px solid var(--line)}
+  .btn-ghost{background:rgba(99,102,241,.10);color:var(--brand);box-shadow:none}
+  .btn-danger{background:linear-gradient(135deg,#f43f5e,#ef4444);box-shadow:0 8px 22px rgba(239,68,68,.32)}
+  .btn-sm{padding:7px 12px;font-size:.8rem;border-radius:10px}
+  .btn-block{width:100%}
+
+  /* Header */
+  .header{position:sticky;top:0;z-index:30;padding:18px 18px 16px;color:#fff;
+    background:linear-gradient(135deg,#4f46e5 0%, #7c3aed 55%, #8b5cf6 100%);
+    border-radius:0 0 26px 26px;box-shadow:0 14px 34px rgba(79,70,229,.32);
+    display:flex;justify-content:space-between;align-items:center;overflow:hidden}
+  .header::after{content:"";position:absolute;right:-40px;top:-60px;width:180px;height:180px;border-radius:50%;
+    background:radial-gradient(circle,rgba(255,255,255,.25),transparent 70%)}
+  .header h1{font-size:1.25rem;margin:0;font-weight:800;letter-spacing:-.02em}
+  .header .sub{opacity:.9;font-size:.74rem;margin-top:2px}
+  .icon-btn{position:relative;z-index:1;background:rgba(255,255,255,.18);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);
+    color:#fff;width:40px;height:40px;border-radius:12px;font-size:1.15rem;cursor:pointer;transition:background .15s}
+  .icon-btn:active{background:rgba(255,255,255,.32)}
+
+  main{padding:16px;max-width:780px;margin:0 auto;animation:rise .35s ease}
+
+  /* Cards & grid */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media (max-width:520px){.grid{grid-template-columns:repeat(2,1fr)}}
+  .card{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;border:1px solid rgba(255,255,255,.6)}
+  .kpi{position:relative;overflow:hidden}
+  .kpi .label{font-size:.66rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:600}
+  .kpi .value{font-size:1.75rem;font-weight:800;margin-top:3px;letter-spacing:-.02em}
+  .kpi .ic{position:absolute;right:12px;top:12px;width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-size:17px;background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(139,92,246,.14))}
+  .section-title{font-size:.72rem;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin:18px 4px 8px}
+
+  .alert{border-radius:var(--radius);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+    box-shadow:var(--shadow);transition:transform .12s}
+  .alert:active{transform:scale(.99)}
+  .alert-warn{background:linear-gradient(135deg,#fff7ed,#ffedd5);color:#9a3412;border:1px solid #fed7aa}
+  .alert-err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca;text-align:left;cursor:default}
+
+  /* Inputs */
+  label{display:block;font-size:.78rem;font-weight:600;margin-bottom:5px;color:#334155}
+  input,select,textarea{width:100%;padding:11px 12px;border:1.5px solid var(--line);border-radius:12px;font-size:.92rem;
+    font-family:inherit;background:#fbfcfe;color:var(--ink);transition:border-color .15s, box-shadow .15s}
+  input:focus,select:focus,textarea:focus{outline:0;border-color:var(--brand);box-shadow:0 0 0 4px rgba(99,102,241,.14);background:#fff}
+  .field{margin-bottom:12px} .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+  /* Dropzone */
+  .drop{border:2px dashed #c7cdf4;border-radius:14px;padding:18px;text-align:center;cursor:pointer;background:rgba(99,102,241,.05);
+    transition:border-color .15s, background .15s}
+  .drop:hover{border-color:var(--brand);background:rgba(99,102,241,.09)}
+  .drop .di{font-size:26px}
+  .scanbox{margin-top:10px;border-radius:12px;padding:10px 12px;font-size:.82rem;display:flex;align-items:center;gap:9px}
+  .scanbox.work{background:#eef2ff;color:#3730a3}
+  .scanbox.done{background:#ecfdf5;color:#065f46}
+  .scanbox.fail{background:#fff7ed;color:#9a3412}
+  .mini-spin{width:16px;height:16px;border-radius:50%;border:2px solid rgba(99,102,241,.3);border-top-color:var(--brand);animation:spin .8s linear infinite;flex:none}
+
+  /* Chips */
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;margin-bottom:6px}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{border:1.5px solid var(--line);background:#fff;color:#475569;padding:7px 14px;border-radius:999px;font-size:.8rem;
+    white-space:nowrap;cursor:pointer;font-weight:600;transition:all .12s}
+  .chip.active{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border-color:transparent;box-shadow:0 6px 16px rgba(99,102,241,.32)}
+
+  /* Candidate list */
+  .crow{display:flex;align-items:center;gap:12px;padding:13px 14px;border-radius:14px;background:#fff;box-shadow:var(--shadow);
+    margin-bottom:10px;cursor:pointer;transition:transform .12s, box-shadow .12s}
+  .crow:active{transform:scale(.995)} .crow:hover{box-shadow:var(--shadow-lg)}
+  .avatar{width:42px;height:42px;border-radius:13px;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;
+    font-weight:700;font-size:.95rem;background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  .crow .nm{font-weight:700} .crow .meta{color:var(--muted);font-size:.76rem}
+
+  .badge{font-size:.66rem;padding:4px 9px;border-radius:999px;white-space:nowrap;font-weight:700}
+  .b-New{background:#e0f2fe;color:#075985} .b-NotScreened{background:#fef3c7;color:#92400e}
+  .b-Shortlisted{background:#e0e7ff;color:#3730a3} .b-Interviewed{background:#f1f5f9;color:#334155}
+  .b-Selected{background:#d1fae5;color:#065f46} .b-Rejected{background:#fee2e2;color:#991b1b} .b-OnHold{background:#f3f4f6;color:#374151}
+
+  /* Funnel / bars */
+  .funnel{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .funnel .fl{width:88px;font-size:.78rem;color:var(--muted);font-weight:600}
+  .funnel .fb{height:28px;border-radius:8px;display:flex;align-items:center;padding:0 11px;font-size:.78rem;font-weight:700;color:#fff;min-width:30px;
+    background:linear-gradient(135deg,var(--brand),var(--brand2))}
+  .bar-track{background:#eef2ff;border-radius:8px;height:9px;overflow:hidden;margin-top:6px}
+  .bar-fill{height:100%;border-radius:8px;background:linear-gradient(90deg,var(--brand),var(--brand3))}
+
+  /* Bottom nav */
+  nav.tabs{position:fixed;left:50%;transform:translateX(-50%);bottom:14px;width:min(94vw,520px);z-index:40;
+    background:rgba(255,255,255,.85);backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.7);
+    border-radius:20px;box-shadow:var(--shadow-lg);display:flex;padding:7px}
+  nav.tabs button{flex:1;background:none;border:0;padding:8px 0;color:var(--muted);font-size:.64rem;font-weight:600;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:3px;border-radius:14px;transition:color .15s, background .15s}
+  nav.tabs button .ic{height:22px;display:flex;align-items:center}
+  nav.tabs button .ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;display:block}
+  nav.tabs button.active{color:var(--brand);background:rgba(99,102,241,.12)}
+  .kpi.clickable{cursor:pointer;transition:transform .12s, box-shadow .12s}
+  .kpi.clickable:hover{box-shadow:var(--shadow-lg)} .kpi.clickable:active{transform:scale(.98)}
+  .err-text{color:var(--bad);font-size:.74rem;margin-top:4px}
+  input.invalid,select.invalid{border-color:var(--bad);box-shadow:0 0 0 4px rgba(239,68,68,.12)}
+
+  .fab{position:fixed;right:max(18px,calc(50vw - 252px));bottom:88px;width:58px;height:58px;border-radius:50%;
+    background:linear-gradient(135deg,var(--brand),var(--brand2));color:#fff;border:0;font-size:1.8rem;cursor:pointer;z-index:35;
+    box-shadow:0 14px 30px rgba(99,102,241,.5);transition:transform .12s}
+  .fab:active{transform:scale(.94)}
+
+  /* Modal */
+  .backdrop{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);z-index:50;display:none;animation:rise .2s}
+  .backdrop.show{display:block}
+  .modal{position:fixed;left:50%;bottom:0;transform:translateX(-50%) translateY(100%);z-index:51;background:#fff;
+    border-radius:24px 24px 0 0;width:min(100vw,560px);max-height:92vh;overflow:auto;box-shadow:var(--shadow-lg);
+    transition:transform .28s cubic-bezier(.22,1,.36,1)}
+  @media (min-width:560px){.modal{bottom:auto;top:50%;border-radius:24px;transform:translate(-50%,-46%) scale(.96);opacity:0;
+    transition:transform .24s, opacity .24s}}
+  .modal.show{transform:translateX(-50%) translateY(0)}
+  @media (min-width:560px){.modal.show{transform:translate(-50%,-50%) scale(1);opacity:1}}
+  .modal .grab{width:42px;height:5px;border-radius:5px;background:#e2e8f0;margin:10px auto 0}
+  @media (min-width:560px){.modal .grab{display:none}}
+  .modal .mh{display:flex;justify-content:space-between;align-items:center;padding:14px 18px 6px}
+  .modal .mh h3{margin:0;font-size:1.08rem;font-weight:800;letter-spacing:-.01em}
+  .modal .mb{padding:8px 18px 22px}
+  .x{background:#f1f5f9;border:0;width:32px;height:32px;border-radius:10px;font-size:1.2rem;cursor:pointer;color:var(--muted);line-height:1}
+
+  .toast{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:99;padding:11px 18px;border-radius:12px;color:#fff;
+    font-size:.86rem;font-weight:600;box-shadow:var(--shadow-lg);animation:rise .2s}
+  .toast.ok{background:linear-gradient(135deg,#10b981,#059669)} .toast.err{background:linear-gradient(135deg,#f43f5e,#ef4444)}
+
+  a.link{color:var(--brand);text-decoration:none;font-weight:600}
+  .stack>*+*{margin-top:10px}
+  .between{display:flex;justify-content:space-between;align-items:center}
+  .pill{display:inline-flex;gap:6px;align-items:center;padding:5px 11px;border-radius:999px;background:rgba(99,102,241,.1);color:var(--brand);font-size:.74rem;font-weight:700}
 </style>
 </head>
 <body>
 
-<!-- LOADER (visible by default; replaces blank flash while bootstrapApp runs) -->
-<div id="loader" class="denied">
-  <div class="spinner-border text-primary mb-2" style="width:2.5rem;height:2.5rem"></div>
-  <p class="text-muted small mb-0" id="loaderMsg">Loading…</p>
-  <p class="text-muted small mt-2" style="font-size:.7rem">build v11 (bisect)</p>
-  <p class="text-muted" style="font-size:.7rem;margin:8px 0 4px">
-    Diagnostic log — triple-click inside the box to select all, then copy:
-  </p>
-  <textarea id="debugPanel" readonly style="
-    width: min(92vw, 560px); height: 45vh; min-height: 240px;
-    background:#0b1221; color:#cbd5e1; padding:10px; border-radius:8px;
-    border:1px solid #1e293b; font-family: ui-monospace, Menlo, Consolas, monospace;
-    font-size:.7rem; line-height: 1.4; resize: vertical; white-space: pre;"></textarea>
+<!-- BOOT SCREEN (auto-loads; no button) -->
+<div id="boot" class="center">
+  <div class="logo">🏨</div>
+  <h2 style="margin:0 0 6px;font-weight:800;letter-spacing:-.02em">SM Recruitment</h2>
+  <div class="spinner" style="margin-top:14px"></div>
+  <p class="muted small" id="bootMsg" style="margin-top:14px">Loading your dashboard…</p>
+  <pre id="diag" class="hidden" style="text-align:left;white-space:pre-wrap;word-break:break-word;max-width:min(92vw,640px);
+    margin-top:14px;padding:10px;border-radius:10px;background:#0b1221;color:#cbd5e1;
+    font:.68rem/1.45 ui-monospace,Menlo,Consolas,monospace;border:1px solid #1e293b"></pre>
 </div>
 
-<!-- EARLY DIAGNOSTIC — runs BEFORE any external script.
-     Writes to the textarea above so you can select+copy with no buttons. -->
-<script>
-(function () {
-  // Centralised line-appender. Works because the textarea exists before this
-  // script runs (it's directly above us in the document).
-  window.__appendDebug = function (line) {
-    var dbg = document.getElementById('debugPanel');
-    if (dbg) {
-      dbg.value += line + '\n';
-      dbg.scrollTop = dbg.scrollHeight;
-    }
-    // Mirror to localStorage so you can recover the log even if the textarea
-    // gets wiped or if the iframe sandbox blocks something:
-    try {
-      var prev = localStorage.getItem('__rrlog') || '';
-      localStorage.setItem('__rrlog', (prev + line + '\n').slice(-20000));
-    } catch (e) {}
-    try { console.log(line); } catch (e) {}
-  };
-
-  // Wipe localStorage log on each fresh page load so it doesn't grow forever.
-  try { localStorage.setItem('__rrlog', ''); } catch (e) {}
-
-  window.__appendDebug('[early] inline script executed at ' + new Date().toISOString());
-  window.__appendDebug('[early] userAgent: ' + (navigator.userAgent || '?').slice(0, 100));
-  window.__appendDebug('[early] google object: ' + (typeof google));
-  if (typeof google !== 'undefined' && google.script) {
-    window.__appendDebug('[early] google.script.run: ' + (typeof google.script.run));
-  }
-
-  // Unregister any stale service worker so we never serve cached HTML.
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(function (regs) {
-      if (regs.length) window.__appendDebug('[early] unregistering ' + regs.length + ' stale SW');
-      regs.forEach(function (r) { r.unregister(); });
-    }).catch(function () {});
-  }
-
-  // Surface any uncaught error globally.
-  window.addEventListener('error', function (e) {
-    window.__appendDebug('[early-err] ' + (e && e.message) + ' @ ' + (e && e.filename) + ':' + (e && e.lineno));
-  });
-  window.addEventListener('unhandledrejection', function (e) {
-    window.__appendDebug('[early-rej] ' + (e && e.reason && (e.reason.message || String(e.reason))));
-  });
-})();
-</script>
-
-<!-- LOGIN / ACCESS DENIED -->
-<div id="gate" class="denied hidden">
-  <i class="bi bi-shield-exclamation"></i>
-  <h4>Access Denied</h4>
-  <p id="gateMsg" class="text-muted"></p>
-  <button class="btn btn-outline-primary" onclick="bootApp()">Retry</button>
+<!-- ACCESS DENIED -->
+<div id="gate" class="center hidden">
+  <div class="logo" style="background:linear-gradient(135deg,#fb7185,#ef4444);box-shadow:0 16px 40px rgba(239,68,68,.4)">⛔</div>
+  <h2 style="margin:0 0 6px;font-weight:800">Access Denied</h2>
+  <p class="muted small" id="gateMsg"></p>
+  <button class="btn" onclick="boot()" style="margin-top:10px">Retry</button>
 </div>
 
 <!-- APP -->
 <div id="app" class="hidden">
-  <header class="app-header">
-    <div class="d-flex justify-content-between align-items-center">
-      <div>
-        <h5 id="screenTitle">Dashboard</h5>
-        <small id="userInfo"></small>
-      </div>
-      <button id="refreshBtn" class="btn btn-sm text-white" onclick="refreshFromServer()"><i class="bi bi-arrow-clockwise"></i></button>
+  <header class="header">
+    <div>
+      <h1 id="screenTitle">Dashboard</h1>
+      <div class="sub" id="userInfo"></div>
     </div>
+    <button class="icon-btn" onclick="refresh()" title="Refresh">⟳</button>
   </header>
-
-  <main class="container py-3" id="mainArea"></main>
-
-  <button id="fab" class="btn-fab hidden" onclick="openAddCandidateModal()"><i class="bi bi-plus-lg"></i></button>
-
-  <nav class="bottom-nav">
-    <button data-view="dashboard" onclick="navigate('dashboard')"><i class="bi bi-house"></i>Home</button>
-    <button data-view="candidates" onclick="navigate('candidates')"><i class="bi bi-people"></i>Candidates</button>
-    <button data-view="interviews" onclick="navigate('interviews')"><i class="bi bi-calendar-check"></i>Interviews</button>
-    <button data-view="analytics" onclick="navigate('analytics')"><i class="bi bi-graph-up"></i>Analytics</button>
-    <button data-view="profile" onclick="navigate('profile')"><i class="bi bi-person-circle"></i>Profile</button>
+  <main id="view"></main>
+  <button id="fab" class="fab hidden" onclick="openAddCandidate()">+</button>
+  <nav class="tabs">
+    <button data-view="dashboard" onclick="go('dashboard')"><span class="ic" data-ic="home"></span>Home</button>
+    <button data-view="candidates" onclick="go('candidates')"><span class="ic" data-ic="people"></span>Candidates</button>
+    <button data-view="interviews" onclick="go('interviews')"><span class="ic" data-ic="calendar"></span>Interviews</button>
+    <button data-view="analytics" onclick="go('analytics')"><span class="ic" data-ic="chart"></span>Analytics</button>
+    <button data-view="profile" onclick="go('profile')"><span class="ic" data-ic="user"></span>Profile</button>
   </nav>
 </div>
 
-<!-- ADD CANDIDATE MODAL -->
-<div class="modal fade" id="candidateModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Add Candidate</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <form id="candidateForm" onsubmit="submitCandidate(event)">
-          <div class="mb-2"><label class="form-label">Name *</label><input class="form-control" name="Name" required></div>
-          <div class="row g-2">
-            <div class="col-6 mb-2"><label class="form-label">Phone</label><input class="form-control" name="Phone"></div>
-            <div class="col-6 mb-2"><label class="form-label">Email</label><input class="form-control" type="email" name="Email"></div>
-          </div>
-          <div class="mb-2"><label class="form-label">Role Applied</label><input class="form-control" name="RoleApplied" placeholder="e.g. Front Desk, Chef"></div>
-          <div class="mb-2"><label class="form-label">Source</label><input class="form-control" name="Source" placeholder="Referral, Naukri, Walk-in"></div>
-          <div class="mb-2"><label class="form-label">Resume Link <span class="text-muted small">(optional)</span></label>
-            <input class="form-control" name="ResumeLink" placeholder="https://drive.google.com/..."></div>
-          <div class="mb-2"><label class="form-label">Upload Resume <span class="text-muted small">(PDF, DOC, image — max 25 MB)</span></label>
-            <input class="form-control" type="file" name="ResumeFile" id="newResumeFile"
-                   accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
-            <div class="form-text">If both link and file are provided, the uploaded file wins.</div>
-          </div>
-          <div class="mb-2"><label class="form-label">Status</label>
-            <select class="form-select" name="Status">
-              <option>New</option><option>Not Screened</option><option>Shortlisted</option>
-            </select>
-          </div>
-          <button class="btn btn-primary w-100 mt-2" type="submit">Save Candidate</button>
-        </form>
-      </div>
-    </div>
-  </div>
+<!-- MODAL -->
+<div id="backdrop" class="backdrop" onclick="closeModal()"></div>
+<div id="modal" class="modal">
+  <div class="grab"></div>
+  <div class="mh"><h3 id="modalTitle">Title</h3><button class="x" onclick="closeModal()">&times;</button></div>
+  <div class="mb" id="modalBody"></div>
 </div>
 
-<!-- CANDIDATE DETAIL MODAL -->
-<div class="modal fade" id="detailModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Candidate Detail</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body" id="detailBody"></div>
-    </div>
-  </div>
-</div>
-
-<!-- INTERVIEW MODAL -->
-<div class="modal fade" id="interviewModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Schedule Interview</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="interviewForm" onsubmit="submitInterview(event)">
-          <input type="hidden" name="CandidateID">
-          <div class="mb-2"><label class="form-label">Round</label>
-            <select class="form-select" name="Round" required>
-              <option>HR</option><option>Technical</option><option>Manager</option>
-            </select></div>
-          <div class="mb-2"><label class="form-label">Interviewer Email</label><input class="form-control" name="Interviewer" type="email" required></div>
-          <div class="mb-2"><label class="form-label">Date & Time</label><input class="form-control" name="DateTime" type="datetime-local" required></div>
-          <div class="mb-2"><label class="form-label">Status</label>
-            <select class="form-select" name="Status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>
-          <button class="btn btn-primary w-100 mt-2" type="submit">Save Interview</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- FEEDBACK MODAL -->
-<div class="modal fade" id="feedbackModal" tabindex="-1">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header"><h5 class="modal-title">Interview Feedback</h5>
-        <button class="btn-close" data-bs-dismiss="modal"></button></div>
-      <div class="modal-body">
-        <form id="feedbackForm" onsubmit="submitFeedback(event)">
-          <input type="hidden" name="InterviewID">
-          <div class="mb-2"><label class="form-label">Score (1–10)</label>
-            <input class="form-control" name="Score" type="number" min="1" max="10" required></div>
-          <div class="mb-2"><label class="form-label">Status</label>
-            <select class="form-select" name="Status"><option>Completed</option><option>Cancelled</option></select></div>
-          <div class="mb-2"><label class="form-label">Feedback</label>
-            <textarea class="form-control" name="Feedback" rows="4" required></textarea></div>
-          <button class="btn btn-primary w-100" type="submit">Save Feedback</button>
-        </form>
-      </div>
-    </div>
-  </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" defer></script>
 <script>
-  // [early2] proves Bootstrap CDN tag did not block subsequent scripts.
-  window.__appendDebug('[early2] reached main script tag at ' + new Date().toISOString());
-</script>
-<script>
-  // [early3] — own standalone block. Tests that a fresh <script> tag
-  // after [early2] still executes at all.
-  window.__appendDebug('[early3] standalone block executed at ' + new Date().toISOString());
-</script>
-<script>
-  // [early4] — feature smoke test: template literals, arrow fns, async,
-  // const/let, spread/rest, optional chaining. If any of these blow up,
-  // the browser is older than ES2020.
-  try {
-    const x = `template ${1 + 1}`;
-    const y = async (a) => a;
-    const z = { a: 1, b: 2 };
-    const { a, ...rest } = z;
-    const maybe = (z && z.a) ?? 'fallback';
-    window.__appendDebug('[early4] modern syntax OK (x=' + x + ', a=' + a + ', maybe=' + maybe + ')');
-  } catch (e) {
-    window.__appendDebug('[early4] FAIL: ' + (e && e.message));
-  }
-</script>
-<script>
-  // [early5] — last marker before the main body.
-  window.__appendDebug('[early5] about to enter main body at ' + new Date().toISOString());
-</script>
-<script>
-window.__appendDebug && window.__appendDebug('[main-0] main body opened');
 // ============================================================
-// STATE  (single-shot cache; navigation renders from this, no refetch)
+// DIAGNOSTICS
 // ============================================================
-const state = {
-  user: null,
-  view: 'dashboard',
-  candidates: [],
-  interviews: [],
-  kpis: null,
-  metrics: null,
-  roleStats: [],
-  filters: { status: 'PENDING', q: '' }, // default: New + Not Screened
-  loaded: false,
-  refreshing: false
-};
-
-// ============================================================
-// VISIBLE DEBUG LOG
-// ============================================================
-const debugLines = [];
-const tBoot = Date.now();
-function dlog(msg, obj) {
-  const t = ((Date.now() - tBoot) / 1000).toFixed(2);
-  const line = `[${t}s] CLIENT ${msg}` + (obj !== undefined ? ' ' + safeJson(obj) : '');
-  debugLines.push(line);
-  // Use the shared appender so it lands in the textarea AND localStorage.
-  if (typeof window.__appendDebug === 'function') window.__appendDebug(line);
-  else { try { console.log(line); } catch (e) {} }
-}
-function safeJson(x) {
-  try { return JSON.stringify(x); } catch (e) { return String(x); }
-}
-
-// Pull server-side logs into the textarea on demand (no UI button — call
-// from the DevTools console if needed: window.fetchServerLogs()).
-window.fetchServerLogs = async function fetchServerLogs() {
-  try {
-    const logs = await api('getServerLogs');
-    if (Array.isArray(logs)) logs.forEach(l => window.__appendDebug('SERVER ' + l));
-  } catch (e) {
-    dlog('fetchServerLogs failed', { msg: e.message });
-  }
-};
-
-window.__appendDebug && window.__appendDebug('[main-1] STATE + DEBUG defined');
-// ============================================================
-// API HELPER (wraps google.script.run with promises + logging)
-// CRITICAL: google.script.run is a Proxy. You CANNOT introspect it
-// (no `typeof runner[fn] === 'function'` checks — they break things).
-// Just invoke the property; if it doesn't exist server-side, the
-// failure handler fires with a clear error message.
-// ============================================================
-function api(fn, ...args) {
-  return new Promise((resolve, reject) => {
-    dlog('api ▶ ' + fn);
-    const callStart = Date.now();
-
-    if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      const err = new Error('google.script.run is not available. Open the Web App URL (not the file preview).');
-      dlog('api ✖ ' + fn + ' — no runtime');
-      reject(err); return;
+console.info('SM Recruitment — build 2026.06.25-modern');
+(function () {
+  var lines = [];
+  function show(){ var d=document.getElementById('diag'); if(d){d.classList.remove('hidden'); d.textContent=lines.join('\n');} }
+  window.__diag=function(s){ lines.push(s); try{console.error('[DIAG] '+s);}catch(e){} show(); };
+  window.onerror=function(msg,src,line,col){
+    if(/createOAuthDialog/i.test(String(src||''))){
+      var m=document.getElementById('bootMsg');
+      if(m) m.textContent='Authorization issue. Deploy the web app with "Execute as: Me" (see README).';
     }
+    window.__diag('ERROR: '+msg); window.__diag('  at '+(src||'?')+':'+line+':'+col); return false;
+  };
+})();
 
-    try {
-      google.script.run
-        .withSuccessHandler((res) => {
-          dlog('api ✔ ' + fn + ' (' + (Date.now() - callStart) + 'ms)');
-          resolve(res);
-        })
-        .withFailureHandler((err) => {
-          dlog('api ✖ ' + fn + ' (' + (Date.now() - callStart) + 'ms)', {
-            msg: err && (err.message || String(err))
-          });
-          reject(err instanceof Error ? err : new Error(err && err.message ? err.message : String(err)));
-        })[fn](...args);
-    } catch (e) {
-      dlog('api ✖ ' + fn + ' threw synchronously', { msg: e.message });
-      reject(e);
-    }
-  });
-}
-
-function toast(msg, type='success') {
-  const t = document.createElement('div');
-  t.className = `position-fixed top-0 start-50 translate-middle-x mt-3 alert alert-${type} shadow`;
-  t.style.zIndex = 9999;
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
-
-window.__appendDebug && window.__appendDebug('[main-2] API helper defined');
 // ============================================================
-// BOOT (single round-trip; caches everything for instant navigation)
+// STATE
 // ============================================================
-function showOnly(id) {
-  ['loader','gate','app'].forEach(x => {
-    const el = document.getElementById(x);
-    if (el) el.classList.toggle('hidden', x !== id);
-  });
-}
+var state={ user:null, view:'dashboard', candidates:[], interviews:[], kpis:{}, metrics:{}, roleStats:[],
+  filter:{status:'PENDING',q:''}, loaded:false, busy:false };
+var CHIPS=[{k:'PENDING',l:'Pending'},{k:'',l:'All'},{k:'New',l:'New'},{k:'Not Screened',l:'Not Screened'},
+  {k:'Shortlisted',l:'Shortlisted'},{k:'Interviewed',l:'Interviewed'},
+  {k:'Selected',l:'Selected'},{k:'Rejected',l:'Rejected'},{k:'On Hold',l:'On Hold'}];
 
-function showError(msg) {
-  document.getElementById('gateMsg').textContent = msg || 'Something went wrong.';
-  showOnly('gate');
-}
-
-async function bootApp() {
-  dlog('bootApp() start');
-  showOnly('loader');
-
-  if (typeof google === 'undefined' || !google.script || !google.script.run) {
-    showError('This page must be opened via the Apps Script Web App URL.');
-    return;
-  }
-
-  // Step 1 — ping the bridge to prove the backend is reachable at all.
-  try {
-    dlog('step 1/2: ping()');
-    const pong = await withTimeout(api('ping'), 20000, 'ping');
-    dlog('ping result', pong);
-    await window.fetchServerLogs(); // pull what the server logged for ping
-  } catch (e) {
-    showError('Backend unreachable on ping(): ' + (e && e.message));
-    try { await window.fetchServerLogs(); } catch (_) {}
-    return;
-  }
-
-  // Step 2 — bootstrap the full payload.
-  let boot;
-  try {
-    dlog('step 2/2: bootstrapApp()');
-    boot = await withTimeout(api('bootstrapApp'), 45000, 'bootstrapApp');
-    await window.fetchServerLogs();
-  } catch (e) {
-    showError('bootstrapApp failed: ' + (e && e.message));
-    try { await window.fetchServerLogs(); } catch (_) {}
-    return;
-  }
-
-  if (!boot || !boot.user) {
-    showError('Empty bootstrap response. Re-paste Code.gs into the editor, Save, then redeploy.');
-    return;
-  }
-  if (!boot.user.authorized) {
-    showError(boot.user.message || 'Access Denied');
-    return;
-  }
-
-  dlog('bootstrap ok', {
-    cached: !!boot.cached,
-    candidates: boot.candidates ? boot.candidates.length : 0,
-    interviews: boot.interviews ? boot.interviews.length : 0
-  });
-
-  applyBoot(boot);
-  document.getElementById('userInfo').textContent = `${state.user.name} · ${state.user.role}`;
-  showOnly('app');
-  applyRoleVisibility();
-  navigate('dashboard');
-  registerSw();
-}
-
-// Reject with a clear message if a promise doesn't settle in time.
-function withTimeout(p, ms, label) {
-  return new Promise((resolve, reject) => {
-    const t = setTimeout(() => {
-      reject(new Error(label + ' did not respond in ' + (ms/1000) + 's.'));
-    }, ms);
-    p.then(v => { clearTimeout(t); resolve(v); },
-           e => { clearTimeout(t); reject(e); });
-  });
-}
-
-function applyBoot(boot) {
-  state.user = boot.user;
-  state.candidates = boot.candidates || [];
-  state.interviews = boot.interviews || [];
-  state.kpis = boot.kpis || null;
-  state.metrics = boot.metrics || null;
-  state.roleStats = boot.roleStats || [];
-  state.loaded = true;
-}
-
-// Background refresh — no skeleton, no flicker.
-async function refreshFromServer() {
-  if (state.refreshing) return;
-  state.refreshing = true;
-  const icon = document.querySelector('#refreshBtn i');
-  if (icon) icon.classList.add('spin');
-  try {
-    const boot = await api('bootstrapApp');
-    if (boot.user && boot.user.authorized) {
-      applyBoot(boot);
-      renderView();
-    }
-  } catch (e) {
-    toast(e.message || 'Refresh failed.', 'danger');
-  } finally {
-    state.refreshing = false;
-    if (icon) icon.classList.remove('spin');
-  }
-}
-
-function applyRoleVisibility() {
-  const p = state.user.permissions || {};
-  document.getElementById('fab').classList.toggle('hidden', !p.addCandidate);
-}
-
-window.__appendDebug && window.__appendDebug('[main-3] BOOT functions defined');
 // ============================================================
+// API
+// ============================================================
+function api(fn){
+  var args=Array.prototype.slice.call(arguments,1);
+  return new Promise(function(resolve,reject){
+    if(typeof google==='undefined'||!google.script||!google.script.run){ reject(new Error('Not running inside the Apps Script web app.')); return; }
+    var r=google.script.run.withSuccessHandler(resolve)
+      .withFailureHandler(function(e){ reject(e instanceof Error?e:new Error(e&&e.message?e.message:String(e))); });
+    r[fn].apply(r,args);
+  });
+}
+function withTimeout(p,ms,label){
+  return new Promise(function(resolve,reject){
+    var t=setTimeout(function(){reject(new Error(label+' timed out after '+(ms/1000)+'s.'));},ms);
+    p.then(function(v){clearTimeout(t);resolve(v);},function(e){clearTimeout(t);reject(e);});
+  });
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];}); }
+function initials(n){ var p=String(n||'?').trim().split(/\s+/); return ((p[0]||'?')[0]+(p[1]?p[1][0]:'')).toUpperCase(); }
+function toast(msg,kind){ var t=document.createElement('div'); t.className='toast '+(kind==='err'?'err':'ok'); t.textContent=msg;
+  document.body.appendChild(t); setTimeout(function(){t.remove();},2800); }
+function formData(form){ var o={},fd=new FormData(form); fd.forEach(function(v,k){o[k]=v;}); return o; }
+
+// ============================================================
+// MODAL
+// ============================================================
+function openModal(title,html){
+  document.getElementById('modalTitle').textContent=title;
+  document.getElementById('modalBody').innerHTML=html;
+  document.getElementById('backdrop').classList.add('show');
+  requestAnimationFrame(function(){ document.getElementById('modal').classList.add('show'); });
+}
+function closeModal(){
+  document.getElementById('backdrop').classList.remove('show');
+  document.getElementById('modal').classList.remove('show');
+}
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeModal(); });
+</script>
+
+<script>
+// ============================================================
+// BOOT  (auto-runs on load — straight to dashboard)
+// ============================================================
+function showScreen(id){ ['boot','gate','app'].forEach(function(x){ var el=document.getElementById(x); if(el) el.classList.toggle('hidden',x!==id); }); }
+function showGate(msg){ document.getElementById('gateMsg').textContent=msg||'Something went wrong.'; showScreen('gate'); }
+
+function boot(){
+  showScreen('boot');
+  if(typeof google==='undefined'||!google.script||!google.script.run){ showGate('Open this page via the Apps Script Web App URL (…/exec).'); return; }
+  withTimeout(api('bootstrapApp'),45000,'bootstrapApp').then(function(d){
+    if(!d||!d.user){ showGate('Empty response from server. Re-check Code.gs / redeploy.'); return; }
+    if(!d.user.authorized){ showGate(d.user.message||'Access denied.'); return; }
+    apply(d);
+    document.getElementById('userInfo').textContent=state.user.name+' · '+state.user.role;
+    showScreen('app');
+    document.getElementById('fab').classList.toggle('hidden',!state.user.permissions.addCandidate);
+    go('dashboard');
+  }).catch(function(e){ showGate((e&&e.message)||'Failed to load.'); });
+}
+function apply(d){
+  state.user=d.user; state.candidates=d.candidates||[]; state.interviews=d.interviews||[];
+  state.kpis=d.kpis||{}; state.metrics=d.metrics||{}; state.roleStats=d.roleStats||[]; state.loaded=true;
+}
+function refresh(){
+  if(state.busy) return; state.busy=true;
+  var btn=document.querySelector('.header .icon-btn'); if(btn) btn.style.opacity='.5';
+  api('bootstrapApp').then(function(d){ if(d.user&&d.user.authorized){ apply(d); render(); } })
+    .catch(function(e){ toast(e.message||'Refresh failed.','err'); })
+    .then(function(){ state.busy=false; if(btn) btn.style.opacity=''; });
+}
+
 // ROUTER
-// ============================================================
-function navigate(view) {
-  state.view = view;
-  document.querySelectorAll('.bottom-nav button').forEach(b => {
-    b.classList.toggle('active', b.dataset.view === view);
-  });
-  document.getElementById('fab').classList.toggle('hidden',
-    view !== 'candidates' || !state.user.permissions.addCandidate);
-  const titles = { dashboard:'Dashboard', candidates:'Candidates', interviews:'Interviews',
-                   analytics:'Analytics', profile:'Profile' };
-  document.getElementById('screenTitle').textContent = titles[view] || '';
-  renderView();
+function go(view){
+  state.view=view;
+  var tabs=document.querySelectorAll('nav.tabs button');
+  for(var i=0;i<tabs.length;i++) tabs[i].classList.toggle('active',tabs[i].getAttribute('data-view')===view);
+  document.getElementById('fab').classList.toggle('hidden',view!=='candidates'||!state.user.permissions.addCandidate);
+  var titles={dashboard:'Dashboard',candidates:'Candidates',interviews:'Interviews',analytics:'Analytics',profile:'Profile'};
+  document.getElementById('screenTitle').textContent=titles[view]||'';
+  render();
+}
+function render(){
+  var m=document.getElementById('view');
+  try{
+    if(state.view==='dashboard') return renderDashboard(m);
+    if(state.view==='candidates') return renderCandidates(m);
+    if(state.view==='interviews') return renderInterviews(m);
+    if(state.view==='analytics') return renderAnalytics(m);
+    if(state.view==='profile') return renderProfile(m);
+  }catch(e){ m.innerHTML='<div class="alert alert-err">'+esc(e.message||'Render error')+'</div>'; }
 }
 
-function refreshAll() { refreshFromServer(); }
-
-// Synchronous render from cache — no network = instant.
-function renderView() {
-  const m = document.getElementById('mainArea');
-  try {
-    if (!state.loaded) {
-      m.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
-      return;
-    }
-    if (state.view === 'dashboard') return renderDashboard(m);
-    if (state.view === 'candidates') return renderCandidates(m);
-    if (state.view === 'interviews') return renderInterviews(m);
-    if (state.view === 'analytics') return renderAnalytics(m);
-    if (state.view === 'profile') return renderProfile(m);
-  } catch (e) {
-    m.innerHTML = `<div class="alert alert-danger">${(e && e.message) || 'Error loading view.'}</div>`;
-  }
-}
-
-window.__appendDebug && window.__appendDebug('[main-4] ROUTER defined');
-// ============================================================
 // DASHBOARD
-// ============================================================
-function renderDashboard(m) {
-  const kpi = state.kpis || {};
-  m.innerHTML = `
-    <div class="row g-2 mb-3">
-      ${kpiCard('Total', kpi.total, 'bi-people-fill', '#0d6efd')}
-      ${kpiCard('New', kpi.new, 'bi-stars', '#0ea5e9')}
-      ${kpiCard('Interviewed', kpi.interviewed, 'bi-mic', '#6366f1')}
-      ${kpiCard('Selected', kpi.selected, 'bi-check2-circle', '#16a34a')}
-      ${kpiCard('Rejected', kpi.rejected, 'bi-x-circle', '#dc2626')}
-      ${kpiCard('On Hold', kpi.onHold, 'bi-pause-circle', '#6b7280')}
-    </div>
-    <div class="alert alert-screen mb-3 d-flex justify-content-between align-items-center" onclick="openNotScreened()">
-      <div>
-        <strong>⚠️ Not Screened Candidates</strong>
-        <div class="small">${kpi.notScreened} pending review — tap to view</div>
-      </div>
-      <i class="bi bi-chevron-right"></i>
-    </div>
-    <div class="d-flex gap-2 flex-wrap">
-      <button class="btn btn-light flex-grow-1" onclick="navigate('candidates')"><i class="bi bi-people me-1"></i>Candidates</button>
-      <button class="btn btn-light flex-grow-1" onclick="navigate('interviews')"><i class="bi bi-calendar-check me-1"></i>Interviews</button>
-      <button class="btn btn-light flex-grow-1" onclick="navigate('analytics')"><i class="bi bi-graph-up me-1"></i>Analytics</button>
-    </div>
-  `;
+// status: optional filter key — when set, the card is clickable and opens the
+// candidates list filtered to that status.
+function kpi(label,val,icon,status){
+  var attrs = (status!==undefined)
+    ? ' class="card kpi clickable" onclick="gotoStatus(\''+status+'\')"'
+    : ' class="card kpi"';
+  return '<div'+attrs+'><div class="ic">'+icon+'</div><div class="label">'+label+'</div><div class="value">'+(val||0)+'</div></div>';
+}
+// Open the Candidates tab filtered to a given status.
+function gotoStatus(status){ state.filter.status=status; state.filter.q=''; go('candidates'); }
+function renderDashboard(m){
+  var k=state.kpis;
+  m.innerHTML=
+    '<div class="grid">'+
+      kpi('Total',k.total,'👥','')+kpi('New',k.new,'✨','New')+kpi('Interviewed',k.interviewed,'🎙','Interviewed')+
+      kpi('Selected',k.selected,'✅','Selected')+kpi('Rejected',k.rejected,'⛔','Rejected')+kpi('On Hold',k.onHold,'⏸','On Hold')+
+    '</div>'+
+    '<div class="alert alert-warn" style="margin-top:14px" onclick="gotoStatus(\'Not Screened\')">'+
+      '<div><strong>Not Screened</strong><div class="small">'+(k.notScreened||0)+' pending review — tap to view</div></div><span style="font-size:1.3rem">›</span></div>'+
+    '<div class="section-title">Quick actions</div>'+
+    '<div class="stack">'+
+      (state.user.permissions.addCandidate?'<button class="btn btn-block" onclick="openAddCandidate()">＋ Add Candidate</button>':'')+
+      '<button class="btn btn-light btn-block" onclick="go(\'analytics\')">View Analytics</button>'+
+    '</div>';
 }
 
-function kpiCard(label, val, icon, color) {
-  return `<div class="col-6 col-md-4">
-    <div class="kpi-card p-3 d-flex align-items-center justify-content-between">
-      <div><div class="label">${label}</div><div class="value">${val||0}</div></div>
-      <i class="bi ${icon} icon" style="color:${color}"></i>
-    </div></div>`;
+// CANDIDATES
+function renderCandidates(m){
+  var chips=CHIPS.map(function(c){ return '<button class="chip'+(state.filter.status===c.k?' active':'')+
+    '" onclick="state.filter.status=\''+c.k+'\';renderCandidates(document.getElementById(\'view\'))">'+esc(c.l)+'</button>'; }).join('');
+  m.innerHTML='<input id="q" placeholder="🔍  Search name, role, phone, email…" value="'+esc(state.filter.q)+
+    '" oninput="state.filter.q=this.value;renderList()" style="margin-bottom:12px">'+
+    '<div class="chips">'+chips+'</div><div id="list"></div>';
+  renderList();
 }
-
-function openNotScreened() {
-  state.filters.status = 'Not Screened';
-  navigate('candidates');
-}
-
-window.__appendDebug && window.__appendDebug('[main-5] DASHBOARD defined');
-// ============================================================
-// CANDIDATES (date-sorted CV table; default: New + Not Screened)
-// ============================================================
-const CHIP_FILTERS = [
-  { key: 'PENDING',     label: 'Pending (New + Not Screened)' },
-  { key: '',            label: 'All' },
-  { key: 'Shortlisted', label: 'Shortlisted' },
-  { key: 'Interviewed', label: 'Interviewed' },
-  { key: 'Selected',    label: 'Selected' },
-  { key: 'Rejected',    label: 'Rejected' },
-  { key: 'On Hold',     label: 'On Hold' }
-];
-
-function renderCandidates(m) {
-  m.innerHTML = `
-    <input id="searchInput" class="form-control mb-2" placeholder="Search name, role, phone, email..."
-           value="${escapeAttr(state.filters.q||'')}"
-           oninput="state.filters.q=this.value; renderCandidateList()">
-    <div class="chip-row" id="chipRow">
-      ${CHIP_FILTERS.map(f => `
-        <button class="chip ${state.filters.status===f.key?'active':''}"
-                onclick="state.filters.status='${f.key}'; renderCandidateList()">
-          ${escapeHtml(f.label)}
-        </button>`).join('')}
-    </div>
-    <div id="candList"></div>`;
-  renderCandidateList();
-}
-
-function renderCandidateList() {
-  // Refresh active chip state
-  const chips = document.querySelectorAll('#chipRow .chip');
-  chips.forEach((c, i) => c.classList.toggle('active', CHIP_FILTERS[i].key === state.filters.status));
-
-  const q = (state.filters.q || '').toLowerCase();
-  const st = state.filters.status;
-
-  let list = state.candidates.filter(c => {
-    if (st === 'PENDING') {
-      if (c.Status !== 'New' && c.Status !== 'Not Screened') return false;
-    } else if (st && c.Status !== st) return false;
-    if (q) {
-      const blob = `${c.Name} ${c.RoleApplied} ${c.Phone} ${c.Email}`.toLowerCase();
-      if (!blob.includes(q)) return false;
-    }
+function renderList(){
+  var q=(state.filter.q||'').toLowerCase(), st=state.filter.status;
+  var list=state.candidates.filter(function(c){
+    if(st==='PENDING'){ if(c.Status!=='New'&&c.Status!=='Not Screened') return false; }
+    else if(st&&c.Status!==st) return false;
+    if(q&&((c.Name||'')+' '+(c.RoleApplied||'')+' '+(c.Phone||'')+' '+(c.Email||'')).toLowerCase().indexOf(q)===-1) return false;
     return true;
   });
-
-  // Newest first by CreatedAt
-  list.sort((a, b) => new Date(b.CreatedAt || 0) - new Date(a.CreatedAt || 0));
-
-  const el = document.getElementById('candList');
-  if (!list.length) {
-    el.innerHTML = '<div class="text-center text-muted py-5">No candidates match this filter.</div>';
-    return;
-  }
-
-  el.innerHTML = `
-    <div class="kpi-card p-0 mb-2" style="overflow:hidden">
-      <div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:#f8fafc">
-        <div class="cv-meta"><strong>${list.length}</strong> CV${list.length===1?'':'s'} · newest first</div>
-        <div class="cv-meta"><i class="bi bi-clock-history"></i> Upload order</div>
-      </div>
-      <div style="overflow-x:auto">
-      <table class="cv-table">
-        <thead>
-          <tr>
-            <th>Candidate</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>CV</th>
-            <th>Uploaded</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${list.map(c => `
-            <tr onclick="openCandidate('${c.CandidateID}')">
-              <td>
-                <div class="cv-name">${escapeHtml(c.Name)}</div>
-                <div class="cv-meta">${escapeHtml(c.Phone||'')}${c.Email?' · '+escapeHtml(c.Email):''}</div>
-              </td>
-              <td>${escapeHtml(c.RoleApplied||'—')}</td>
-              <td><span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status||''}</span></td>
-              <td onclick="event.stopPropagation()">
-                ${c.ResumeLink
-                  ? `<a class="cv-link" href="${encodeURI(c.ResumeLink)}" target="_blank"><i class="bi bi-file-earmark-text"></i> View</a>`
-                  : '<span class="cv-meta">—</span>'}
-              </td>
-              <td class="cv-meta">${formatRelative(c.CreatedAt)}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-      </div>
-    </div>`;
+  list.sort(function(a,b){ return new Date(b.CreatedAt||0)-new Date(a.CreatedAt||0); });
+  var el=document.getElementById('list');
+  if(!list.length){ el.innerHTML='<div class="card muted small" style="text-align:center">No candidates match.</div>'; return; }
+  el.innerHTML='<div class="muted tiny" style="margin:0 4px 8px">'+list.length+' candidate'+(list.length===1?'':'s')+' · newest first</div>'+
+    list.map(function(c){
+      return '<div class="crow" onclick="openCandidate(\''+c.CandidateID+'\')">'+
+        '<div class="avatar">'+initials(c.Name)+'</div>'+
+        '<div style="flex:1;min-width:0"><div class="nm">'+esc(c.Name)+'</div>'+
+          '<div class="meta">'+esc(c.RoleApplied||'—')+(c.Phone?' · '+esc(c.Phone):'')+'</div></div>'+
+        '<div style="text-align:right"><span class="badge b-'+badge(c.Status)+'">'+esc(c.Status||'')+'</span>'+
+          '<div class="muted tiny" style="margin-top:5px">'+rel(c.CreatedAt)+'</div></div></div>';
+    }).join('');
 }
-
-function candidateNameById(id) {
-  const c = state.candidates.find(x => x.CandidateID === id);
-  return c ? c.Name : id;
+function badge(s){ return String(s||'').replace(/\s/g,''); }
+function nameOf(id){ for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) return state.candidates[i].Name; return id; }
+function rel(d){
+  if(!d) return '—'; var dt=new Date(d); if(isNaN(dt)) return String(d);
+  var diff=Date.now()-dt.getTime(); if(diff<0) return dt.toLocaleDateString();
+  var mi=Math.floor(diff/6e4),h=Math.floor(diff/36e5),da=Math.floor(diff/864e5);
+  if(mi<1) return 'just now'; if(mi<60) return mi+'m'; if(h<24) return h+'h'; if(da<7) return da+'d'; return dt.toLocaleDateString();
 }
+function fdate(d){ if(!d) return '—'; var dt=new Date(d); return isNaN(dt)?String(d):dt.toLocaleString(); }
+</script>
 
-function formatRelative(d) {
-  if (!d) return '—';
-  const dt = new Date(d);
-  if (isNaN(dt)) return String(d);
-  const diff = Date.now() - dt.getTime();
-  const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), days = Math.floor(diff/86400000);
-  if (diff < 0) return dt.toLocaleDateString();
-  if (m < 1) return 'just now';
-  if (m < 60) return m + 'm ago';
-  if (h < 24) return h + 'h ago';
-  if (days < 7) return days + 'd ago';
-  return dt.toLocaleDateString();
-}
-
-function openAddCandidateModal() {
-  document.getElementById('candidateForm').reset();
-  new bootstrap.Modal('#candidateModal').show();
-}
-
-async function submitCandidate(e) {
-  e.preventDefault();
-  const form = e.target;
-  const fd = Object.fromEntries(new FormData(form).entries());
-  delete fd.ResumeFile;
-
-  const fileInput = document.getElementById('newResumeFile');
-  const btn = form.querySelector('button[type="submit"]');
-  const originalLabel = btn.innerHTML;
-
-  try {
-    if (fileInput && fileInput.files && fileInput.files[0]) {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading resume...';
-      fd.ResumeUpload = await fileToUploadPayload(fileInput.files[0]);
-    } else {
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
-    }
-    const res = await api('addCandidate', fd);
-    // Insert into cache instantly so the new CV shows up at the top of the list.
-    state.candidates.unshift({
-      CandidateID: res.CandidateID,
-      Name: fd.Name, Phone: fd.Phone || '', Email: fd.Email || '',
-      RoleApplied: fd.RoleApplied || '',
-      ResumeLink: res.ResumeLink || fd.ResumeLink || '',
-      Source: fd.Source || '',
-      Status: fd.Status || 'New',
-      CreatedAt: new Date().toISOString()
-    });
-    bootstrap.Modal.getInstance(document.getElementById('candidateModal')).hide();
-    toast('Candidate saved.');
-    renderView();
-    refreshFromServer();
-  } catch (err) {
-    toast(err.message || 'Failed.', 'danger');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = originalLabel;
-  }
-}
-
-// Read a File as { fileName, mimeType, base64 }. Rejects files over the limit.
-function fileToUploadPayload(file) {
-  const MAX = 25 * 1024 * 1024;
-  if (file.size > MAX) {
-    return Promise.reject(new Error('File too large. Limit is 25 MB.'));
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Could not read file.'));
-    reader.onload = () => {
-      const result = reader.result || '';
-      const b64 = String(result).split(',')[1] || '';
-      resolve({
-        fileName: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        base64: b64
-      });
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function openCandidate(id) {
-  const c = state.candidates.find(x => x.CandidateID === id);
-  if (!c) { toast('Candidate not found in cache. Refresh.', 'warning'); return; }
-  const interviews = state.interviews.filter(i => i.CandidateID === id);
-  const p = state.user.permissions;
-  const statusOpts = ['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
-    .map(s => `<option ${c.Status===s?'selected':''}>${s}</option>`).join('');
-  const body = `
-    <h5>${escapeHtml(c.Name)}</h5>
-    <div class="text-muted small mb-2">${escapeHtml(c.RoleApplied||'')}</div>
-    <p class="mb-1"><i class="bi bi-telephone"></i> ${escapeHtml(c.Phone||'—')}</p>
-    <p class="mb-1"><i class="bi bi-envelope"></i> ${escapeHtml(c.Email||'—')}</p>
-    <p class="mb-1"><i class="bi bi-link-45deg"></i>
-      <span id="resumeLinkArea">
-        ${c.ResumeLink ? `<a href="${encodeURI(c.ResumeLink)}" target="_blank">View Resume</a>` : '—'}
-      </span>
-    </p>
-    <p class="mb-3"><span class="badge-status b-${(c.Status||'').replace(/\s/g,'')}">${c.Status}</span></p>
-
-    ${p.editCandidate ? `
-      <div class="mb-3">
-        <label class="form-label">${c.ResumeLink ? 'Replace' : 'Upload'} Resume <span class="text-muted small">(any format, max 25 MB)</span></label>
-        <div class="d-flex gap-2">
-          <input type="file" class="form-control" id="resumeUploadInput"
-                 accept=".pdf,.doc,.docx,.rtf,.txt,.odt,.png,.jpg,.jpeg,.webp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/*">
-          <button class="btn btn-primary" id="resumeUploadBtn" onclick="uploadResume('${c.CandidateID}')">
-            <i class="bi bi-cloud-upload"></i>
-          </button>
-        </div>
-      </div>` : ''}
-
-    ${p.changeStatus ? `
-      <div class="mb-3">
-        <label class="form-label">Update Status</label>
-        <div class="d-flex gap-2">
-          <select id="statusSelect" class="form-select">${statusOpts}</select>
-          <button class="btn btn-primary" onclick="changeStatus('${c.CandidateID}')">Save</button>
-        </div>
-      </div>` : ''}
-
-    ${p.scheduleInterview ? `
-      <button class="btn btn-outline-primary mb-3" onclick="openInterviewModal('${c.CandidateID}')">
-        <i class="bi bi-calendar-plus"></i> Schedule Interview
-      </button>` : ''}
-
-    <h6>Interview History</h6>
-    ${interviews.length ? interviews.map(i => `
-      <div class="border rounded p-2 mb-2">
-        <div class="d-flex justify-content-between">
-          <strong>${escapeHtml(i.Round)}</strong>
-          <span class="small text-muted">${formatDate(i.DateTime)}</span>
-        </div>
-        <div class="small">Interviewer: ${escapeHtml(i.Interviewer||'—')}</div>
-        <div class="small">Status: ${escapeHtml(i.Status||'—')} · Score: ${i.Score||'—'}</div>
-        ${i.Feedback ? `<div class="small mt-1">${escapeHtml(i.Feedback)}</div>` : ''}
-        ${p.addFeedback ? `<button class="btn btn-sm btn-outline-secondary mt-1" onclick="openFeedbackModal('${i.InterviewID}','${escapeAttr(i.Feedback||'')}','${i.Score||''}','${i.Status||''}')">Add/Edit Feedback</button>` : ''}
-      </div>`).join('') : '<div class="text-muted small">No interviews yet.</div>'}
-  `;
-  document.getElementById('detailBody').innerHTML = body;
-  new bootstrap.Modal('#detailModal').show();
-}
-
-// Mutate the local cache so the UI reflects writes instantly.
-function patchCandidateInCache(id, patch) {
-  const c = state.candidates.find(x => x.CandidateID === id);
-  if (c) Object.assign(c, patch);
-}
-
-async function changeStatus(id) {
-  const v = document.getElementById('statusSelect').value;
-  try {
-    await api('updateStatus', id, v);
-    patchCandidateInCache(id, { Status: v });
-    toast('Status updated.');
-    bootstrap.Modal.getInstance(document.getElementById('detailModal')).hide();
-    renderView();
-    refreshFromServer(); // pull fresh data in the background
-  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
-}
-
-async function uploadResume(candidateId) {
-  const input = document.getElementById('resumeUploadInput');
-  const btn = document.getElementById('resumeUploadBtn');
-  if (!input || !input.files || !input.files[0]) {
-    toast('Choose a file first.', 'warning');
-    return;
-  }
-  const original = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-  try {
-    const payload = await fileToUploadPayload(input.files[0]);
-    const res = await api('uploadResumeForCandidate', candidateId, payload);
-    patchCandidateInCache(candidateId, { ResumeLink: res.ResumeLink });
-    toast('Resume uploaded.');
-    const area = document.getElementById('resumeLinkArea');
-    if (area && res.ResumeLink) {
-      area.innerHTML = `<a href="${encodeURI(res.ResumeLink)}" target="_blank">View Resume</a>`;
-    }
-    input.value = '';
-  } catch (e) {
-    toast(e.message || 'Upload failed.', 'danger');
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = original;
-  }
-}
-
-window.__appendDebug && window.__appendDebug('[main-6] CANDIDATES section defined');
+<script>
 // ============================================================
+// ADD CANDIDATE + RESUME UPLOAD/AUTOFILL
+// ============================================================
+function openAddCandidate(){
+  openModal('Add Candidate',
+    '<form id="candForm" onsubmit="submitCandidate(event)" class="stack">'+
+      '<div class="drop" id="drop" onclick="document.getElementById(\'resumeFile\').click()">'+
+        '<div class="di">📄</div><div style="font-weight:700;margin-top:4px">Upload Resume to auto-fill</div>'+
+        '<div class="muted tiny" style="margin-top:2px">PDF, DOC/DOCX, or image · saved to Drive · max 20&nbsp;MB</div>'+
+        '<input type="file" id="resumeFile" class="hidden" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,application/pdf,image/*" onchange="onResumePicked(this)">'+
+      '</div>'+
+      '<div id="scanStatus"></div>'+
+      '<input type="hidden" name="ResumeLink" id="resumeLink">'+
+      '<div class="field"><label>Name *</label><input name="Name" id="f_name" required></div>'+
+      '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="f_phone"></div>'+
+      '<div class="field"><label>Email</label><input name="Email" id="f_email" type="email"></div></div>'+
+      '<div class="field"><label>Role Applied</label><input name="RoleApplied" id="f_role" placeholder="Front Desk, Chef…"></div>'+
+      '<div class="field"><label>Source</label><input name="Source" placeholder="Referral, Naukri…"></div>'+
+      '<div class="field"><label>Status</label><select name="Status"><option>New</option><option>Not Screened</option><option>Shortlisted</option></select></div>'+
+      '<button class="btn btn-block" type="submit">Save Candidate</button>'+
+    '</form>');
+}
+
+// Read file -> base64, call scanResume, fill fields.
+function onResumePicked(input){
+  var file=input.files&&input.files[0]; if(!file) return;
+  if(file.size>20*1024*1024){ setScan('fail','File too large (max 20 MB).'); return; }
+  setScan('work','Uploading & reading “'+file.name+'”… (AI may take a few seconds)');
+  var reader=new FileReader();
+  reader.onerror=function(){ setScan('fail','Could not read the file.'); };
+  reader.onload=function(){
+    var b64=String(reader.result||'').split(',')[1]||'';
+    api('scanResume',{ fileName:file.name, mimeType:file.type||'application/octet-stream', base64:b64 })
+      .then(function(res){
+        if(res.url) document.getElementById('resumeLink').value=res.url;
+        if(res.duplicate){
+          setScan('fail','This exact resume was already uploaded earlier — using the existing file (no duplicate created).',res);
+          return;
+        }
+        var s=res.suggested||{}, filled=[];
+        if(s.name){ document.getElementById('f_name').value=s.name; filled.push('name'); }
+        if(s.phone){ document.getElementById('f_phone').value=s.phone; filled.push('phone'); }
+        if(s.email){ document.getElementById('f_email').value=s.email; filled.push('email'); }
+        if(s.role){ var rl=document.getElementById('f_role'); if(rl&&!rl.value){ rl.value=s.role; filled.push('role'); } }
+        var src=res.usedAi?(' (AI · '+(res.aiMode||'')+')'):'';
+        var extra='';
+        if(!res.textOk){ extra=' Note: this PDF’s text layer is unreadable, so AI must read the file itself.'; }
+        if(filled.length){ setScan('done','Saved to Drive · auto-filled '+filled.join(', ')+src+'. Please verify.',res); }
+        else if(res.aiError){
+          var busy=/busy|503|overload/i.test(res.aiError), quota=/429|quota|limit/i.test(res.aiError);
+          var why=busy?'AI is temporarily busy — try again in a moment, or fill the fields manually.'
+            :(quota?'AI daily free limit reached — fill manually (resets at Pacific midnight), switch GEMINI_MODEL, or add a Groq key.'
+            :'AI couldn’t read this one — please fill manually.');
+          setScan('fail','Saved to Drive. '+why+extra,res);
+        }
+        else if(!res.aiConfigured){ setScan('fail','Saved to Drive. Couldn’t auto-detect — set a Gemini/Groq key (see README) for AI extraction, or fill manually.'+extra,res); }
+        else { setScan('fail','Saved to Drive. Couldn’t auto-detect details — please fill them in.'+extra,res); }
+      })
+      .catch(function(err){ setScan('fail','Upload failed: '+(err.message||'error')); });
+  };
+  reader.readAsDataURL(file);
+}
+function setScan(kind,msg,res){
+  var el=document.getElementById('scanStatus'); if(!el) return;
+  var icon=kind==='work'?'<span class="mini-spin"></span>':(kind==='done'?'✅':'⚠️');
+  var dbg='';
+  if(res&&typeof res.debugText==='string'){
+    var t=res.debugText?esc(res.debugText):'(empty — the PDF produced no readable text)';
+    dbg='<div style="margin-top:6px"><a href="#" onclick="this.nextSibling.classList.toggle(\'hidden\');return false" style="font-size:.72rem">▸ what the scanner read ('+(res.extractedChars||0)+' chars)</a>'+
+      '<div class="hidden" style="margin-top:4px;max-height:120px;overflow:auto;background:#0b1221;color:#cbd5e1;padding:8px;border-radius:8px;font:.66rem ui-monospace,monospace;white-space:pre-wrap">'+t+'</div></div>';
+  }
+  el.innerHTML='<div class="scanbox '+kind+'">'+icon+'<span>'+esc(msg)+'</span></div>'+dbg;
+}
+function validEmail(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s||'').trim()); }
+function validPhone(s){ var d=String(s||'').replace(/[^\d]/g,''); return d.length>=7&&d.length<=15; }
+function fieldErr(id,bad,msg){
+  var el=document.getElementById(id); if(!el) return;
+  el.classList.toggle('invalid',!!bad);
+  var next=el.parentNode.querySelector('.err-text');
+  if(bad){ if(!next){ next=document.createElement('div'); next.className='err-text'; el.parentNode.appendChild(next);} next.textContent=msg; }
+  else if(next){ next.remove(); }
+}
+function submitCandidate(e){
+  e.preventDefault(); var d=formData(e.target);
+  // Client-side validation before the round-trip.
+  var ok=true;
+  if(d.Email&&!validEmail(d.Email)){ fieldErr('f_email',true,'Enter a valid email.'); ok=false; } else fieldErr('f_email',false);
+  if(d.Phone&&!validPhone(d.Phone)){ fieldErr('f_phone',true,'Enter a valid phone (7–15 digits).'); ok=false; } else fieldErr('f_phone',false);
+  if(!d.Phone&&!d.Email){ fieldErr('f_email',true,'Provide a phone or an email.'); ok=false; }
+  if(!ok){ toast('Please fix the highlighted fields.','err'); return; }
+  var btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+  api('addCandidate',d).then(function(res){
+    state.candidates.unshift({ CandidateID:res.CandidateID, Name:d.Name, Phone:d.Phone||'', Email:d.Email||'',
+      RoleApplied:d.RoleApplied||'', ResumeLink:res.ResumeLink||'', Source:d.Source||'', Status:d.Status||'New', CreatedAt:new Date().toISOString() });
+    closeModal(); toast('Candidate saved.'); render(); refresh();
+  }).catch(function(err){ btn.disabled=false; btn.textContent='Save Candidate'; toast(err.message||'Failed.','err'); });
+}
+
+function openCandidate(id){
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
+  if(!c){ toast('Not found. Refresh.','err'); return; }
+  var p=state.user.permissions;
+  var ivs=state.interviews.filter(function(x){return x.CandidateID===id;});
+  var opts=['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
+    .map(function(s){return '<option'+(c.Status===s?' selected':'')+'>'+s+'</option>';}).join('');
+  var html='<div class="stack">'+
+    '<div class="between"><div style="display:flex;gap:12px;align-items:center">'+
+      '<div class="avatar" style="width:48px;height:48px;border-radius:15px;font-size:1.05rem">'+initials(c.Name)+'</div>'+
+      '<div><strong style="font-size:1.1rem">'+esc(c.Name)+'</strong><div class="muted small">'+esc(c.RoleApplied||'')+'</div></div></div>'+
+      '<span class="badge b-'+badge(c.Status)+'">'+esc(c.Status)+'</span></div>'+
+    '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:#fbfcfe">'+
+      '<div class="small">📞 '+esc(c.Phone||'—')+'</div><div class="small" style="margin-top:5px">✉️ '+esc(c.Email||'—')+'</div>'+
+      '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div></div>';
+  if(p.changeStatus) html+='<div class="field"><label>Update Status</label><div style="display:flex;gap:8px">'+
+    '<select id="newStatus">'+opts+'</select><button class="btn btn-sm" onclick="changeStatus(\''+id+'\')">Save</button></div></div>';
+  if(p.scheduleInterview) html+='<button class="btn btn-ghost btn-block" onclick="openInterview(\''+id+'\')">＋ Schedule Interview</button>';
+  html+='<div class="section-title" style="margin-left:0">Interview History</div>'+
+    (ivs.length?ivs.map(function(iv){
+      return '<div class="card" style="padding:12px;box-shadow:none;border:1px solid var(--line)"><div class="between"><strong>'+esc(iv.Round)+
+        '</strong><span class="muted tiny">'+fdate(iv.DateTime)+'</span></div>'+
+        '<div class="small">'+esc(iv.Interviewer||'—')+' · '+esc(iv.Status||'—')+' · Score '+esc(iv.Score||'—')+'</div>'+
+        (iv.Feedback?'<div class="small" style="margin-top:4px">'+esc(iv.Feedback)+'</div>':'')+
+        (p.addFeedback?'<button class="btn btn-light btn-sm" style="margin-top:8px" onclick="openFeedback(\''+iv.InterviewID+'\')">Add/Edit Feedback</button>':'')+'</div>';
+    }).join(''):'<div class="muted small">No interviews yet.</div>')+'</div>';
+  openModal('Candidate',html);
+}
+function changeStatus(id){
+  var v=document.getElementById('newStatus').value;
+  api('updateStatus',id,v).then(function(){
+    for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) state.candidates[i].Status=v;
+    closeModal(); toast('Status updated.'); render(); refresh();
+  }).catch(function(e){ toast(e.message||'Failed.','err'); });
+}
+
 // INTERVIEWS
-// ============================================================
-function renderInterviews(m) {
-  if (!state.interviews.length) {
-    m.innerHTML = '<div class="text-center text-muted py-5">No interviews scheduled.</div>';
-    return;
-  }
-  m.innerHTML = state.interviews
-    .sort((a,b)=> new Date(b.DateTime) - new Date(a.DateTime))
-    .map(i => `
-      <div class="candidate-row">
-        <div class="flex-grow-1">
-          <div class="d-flex justify-content-between">
-            <strong>${escapeHtml(i.Round)} Interview</strong>
-            <span class="small text-muted">${formatDate(i.DateTime)}</span>
-          </div>
-          <div class="small text-muted">Candidate: ${escapeHtml(candidateNameById(i.CandidateID))}</div>
-          <div class="small">Interviewer: ${escapeHtml(i.Interviewer||'—')} · Status: ${escapeHtml(i.Status||'—')}</div>
-          ${i.Feedback ? `<div class="small mt-1 fst-italic">${escapeHtml(i.Feedback)}</div>` : ''}
-          ${state.user.permissions.addFeedback ? `
-            <button class="btn btn-sm btn-outline-primary mt-2" onclick="openFeedbackModal('${i.InterviewID}','${escapeAttr(i.Feedback||'')}','${i.Score||''}','${i.Status||''}')">
-              <i class="bi bi-pencil"></i> Feedback
-            </button>` : ''}
-        </div>
-      </div>`).join('');
+function renderInterviews(m){
+  if(!state.interviews.length){ m.innerHTML='<div class="card muted small" style="text-align:center">No interviews scheduled.</div>'; return; }
+  var list=state.interviews.slice().sort(function(a,b){return new Date(b.DateTime)-new Date(a.DateTime);});
+  m.innerHTML=list.map(function(iv){
+    return '<div class="card" style="margin-bottom:10px"><div class="between"><strong>'+esc(iv.Round)+' Interview</strong>'+
+      '<span class="muted tiny">'+fdate(iv.DateTime)+'</span></div>'+
+      '<div class="muted small" style="margin-top:2px">Candidate: '+esc(nameOf(iv.CandidateID))+'</div>'+
+      '<div class="small">'+esc(iv.Interviewer||'—')+' · '+esc(iv.Status||'—')+'</div>'+
+      (iv.Feedback?'<div class="small" style="margin-top:4px;font-style:italic">'+esc(iv.Feedback)+'</div>':'')+
+      (state.user.permissions.addFeedback?'<button class="btn btn-light btn-sm" style="margin-top:8px" onclick="openFeedback(\''+iv.InterviewID+'\')">Feedback</button>':'')+'</div>';
+  }).join('');
+}
+function openInterview(candidateId){
+  openModal('Schedule Interview',
+    '<form onsubmit="submitInterview(event)" class="stack"><input type="hidden" name="CandidateID" value="'+candidateId+'">'+
+      '<div class="field"><label>Round</label><select name="Round"><option>HR</option><option>Technical</option><option>Manager</option></select></div>'+
+      '<div class="field"><label>Interviewer Email</label><input name="Interviewer" type="email" required></div>'+
+      '<div class="field"><label>Date &amp; Time</label><input name="DateTime" type="datetime-local" required></div>'+
+      '<div class="field"><label>Status</label><select name="Status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>'+
+      '<button class="btn btn-block" type="submit">Save Interview</button></form>');
+}
+function submitInterview(e){
+  e.preventDefault(); var d=formData(e.target);
+  api('addInterview',d).then(function(res){
+    state.interviews.push({ InterviewID:res.InterviewID, CandidateID:d.CandidateID, Round:d.Round, Interviewer:d.Interviewer,
+      DateTime:d.DateTime, Status:d.Status||'Scheduled', Feedback:'', Score:'' });
+    closeModal(); toast('Interview scheduled.'); refresh();
+  }).catch(function(err){ toast(err.message||'Failed.','err'); });
+}
+function openFeedback(id){
+  var iv=null; for(var i=0;i<state.interviews.length;i++) if(state.interviews[i].InterviewID===id) iv=state.interviews[i]; iv=iv||{};
+  openModal('Interview Feedback',
+    '<form onsubmit="submitFeedback(event)" class="stack"><input type="hidden" name="InterviewID" value="'+id+'">'+
+      '<div class="field"><label>Score (1–10)</label><input name="Score" type="number" min="1" max="10" value="'+esc(iv.Score||'')+'"></div>'+
+      '<div class="field"><label>Status</label><select name="Status"><option'+(iv.Status==='Completed'?' selected':'')+'>Completed</option>'+
+        '<option'+(iv.Status==='Cancelled'?' selected':'')+'>Cancelled</option></select></div>'+
+      '<div class="field"><label>Feedback</label><textarea name="Feedback" rows="4">'+esc(iv.Feedback||'')+'</textarea></div>'+
+      '<button class="btn btn-block" type="submit">Save Feedback</button></form>');
+}
+function submitFeedback(e){
+  e.preventDefault(); var d=formData(e.target);
+  api('updateInterviewFeedback',d).then(function(){
+    for(var i=0;i<state.interviews.length;i++) if(state.interviews[i].InterviewID===d.InterviewID){
+      state.interviews[i].Feedback=d.Feedback; state.interviews[i].Score=d.Score; state.interviews[i].Status=d.Status; }
+    closeModal(); toast('Feedback saved.'); render(); refresh();
+  }).catch(function(err){ toast(err.message||'Failed.','err'); });
 }
 
-function openInterviewModal(candidateId) {
-  const f = document.getElementById('interviewForm');
-  f.reset();
-  f.CandidateID.value = candidateId;
-  new bootstrap.Modal('#interviewModal').show();
-}
-
-async function submitInterview(e) {
-  e.preventDefault();
-  const fd = Object.fromEntries(new FormData(e.target).entries());
-  try {
-    const res = await api('addInterview', fd);
-    state.interviews.push({
-      InterviewID: res.InterviewID,
-      CandidateID: fd.CandidateID, Round: fd.Round,
-      Interviewer: fd.Interviewer, DateTime: fd.DateTime,
-      Status: fd.Status || 'Scheduled', Feedback: '', Score: ''
-    });
-    bootstrap.Modal.getInstance(document.getElementById('interviewModal')).hide();
-    toast('Interview scheduled.');
-    refreshFromServer();
-  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
-}
-
-function openFeedbackModal(id, feedback, score, status) {
-  const f = document.getElementById('feedbackForm');
-  f.reset();
-  f.InterviewID.value = id;
-  f.Feedback.value = feedback || '';
-  f.Score.value = score || '';
-  if (status) f.Status.value = status;
-  // Close any other modal first
-  const detail = bootstrap.Modal.getInstance(document.getElementById('detailModal'));
-  if (detail) detail.hide();
-  new bootstrap.Modal('#feedbackModal').show();
-}
-
-async function submitFeedback(e) {
-  e.preventDefault();
-  const fd = Object.fromEntries(new FormData(e.target).entries());
-  try {
-    await api('updateInterviewFeedback', fd);
-    const iv = state.interviews.find(x => x.InterviewID === fd.InterviewID);
-    if (iv) {
-      if (fd.Feedback !== undefined) iv.Feedback = fd.Feedback;
-      if (fd.Score !== undefined) iv.Score = fd.Score;
-      if (fd.Status !== undefined) iv.Status = fd.Status;
-    }
-    bootstrap.Modal.getInstance(document.getElementById('feedbackModal')).hide();
-    toast('Feedback saved.');
-    renderView();
-    refreshFromServer();
-  } catch (err) { toast(err.message || 'Failed.', 'danger'); }
-}
-
-window.__appendDebug && window.__appendDebug('[main-7] INTERVIEWS defined');
-// ============================================================
 // ANALYTICS
-// ============================================================
-function renderAnalytics(m) {
-  const metrics = state.metrics || { funnel:{new:0,screened:0,interviewed:0,selected:0},
-                                     screeningRate:0, interviewConversionRate:0, rejectionRate:0 };
-  const roleStats = state.roleStats || [];
-  const fn = metrics.funnel;
-  const max = Math.max(fn.new, 1);
-  const w = v => Math.max(8, Math.round((v / max) * 100));
-
-  const maxRole = Math.max(1, ...roleStats.map(r => r.total));
-  m.innerHTML = `
-    <div class="row g-2 mb-3">
-      ${kpiCard('Screening Rate', metrics.screeningRate + '%', 'bi-funnel', '#0ea5e9')}
-      ${kpiCard('Interview→Sel', metrics.interviewConversionRate + '%', 'bi-trophy', '#16a34a')}
-      ${kpiCard('Rejection Rate', metrics.rejectionRate + '%', 'bi-x-octagon', '#dc2626')}
-    </div>
-
-    <div class="kpi-card p-3 mb-3">
-      <div class="label mb-2">Hiring Funnel</div>
-      <div class="funnel-row"><span style="width:90px" class="small text-muted">New</span>
-        <div class="funnel-bar" style="width:${w(fn.new)}%">${fn.new}</div></div>
-      <div class="funnel-row"><span style="width:90px" class="small text-muted">Screened</span>
-        <div class="funnel-bar" style="width:${w(fn.screened)}%;background:#6366f1">${fn.screened}</div></div>
-      <div class="funnel-row"><span style="width:90px" class="small text-muted">Interviewed</span>
-        <div class="funnel-bar" style="width:${w(fn.interviewed)}%;background:#8b5cf6">${fn.interviewed}</div></div>
-      <div class="funnel-row"><span style="width:90px" class="small text-muted">Selected</span>
-        <div class="funnel-bar" style="width:${w(fn.selected)}%;background:#16a34a">${fn.selected}</div></div>
-    </div>
-
-    <div class="kpi-card p-3">
-      <div class="label mb-2">Role vs Selected</div>
-      ${roleStats.length ? roleStats.map(r => `
-        <div class="mb-2">
-          <div class="d-flex justify-content-between small">
-            <span>${escapeHtml(r.role)}</span>
-            <span>${r.selected}/${r.total} selected</span>
-          </div>
-          <div class="role-bar"><span style="width:${Math.round((r.selected/r.total||0)*100)}%"></span></div>
-        </div>`).join('') : '<div class="text-muted small">No data.</div>'}
-    </div>
-  `;
+function renderAnalytics(m){
+  var mt=state.metrics, fn=mt.funnel||{new:0,screened:0,interviewed:0,selected:0};
+  var max=Math.max(fn.new,1), w=function(v){return Math.max(8,Math.round((v/max)*100));};
+  var rs=state.roleStats||[];
+  m.innerHTML='<div class="grid">'+
+      kpi('Screening %',mt.screeningRate||0,'🔎')+kpi('Interview→Sel %',mt.interviewConversionRate||0,'🏆')+kpi('Rejection %',mt.rejectionRate||0,'📉')+
+    '</div>'+
+    '<div class="card" style="margin-top:14px"><div class="section-title" style="margin:0 0 10px">Hiring Funnel</div>'+
+      funnel('New',fn.new,w(fn.new))+funnel('Screened',fn.screened,w(fn.screened))+funnel('Interviewed',fn.interviewed,w(fn.interviewed))+funnel('Selected',fn.selected,w(fn.selected))+'</div>'+
+    '<div class="card" style="margin-top:14px"><div class="section-title" style="margin:0 0 10px">Role vs Selected</div>'+
+      (rs.length?rs.map(function(r){ var pct=Math.round((r.selected/(r.total||1))*100);
+        return '<div style="margin-bottom:12px"><div class="between small"><span style="font-weight:600">'+esc(r.role)+'</span><span class="muted">'+r.selected+'/'+r.total+'</span></div>'+
+          '<div class="bar-track"><div class="bar-fill" style="width:'+pct+'%"></div></div></div>';
+      }).join(''):'<div class="muted small">No data.</div>')+'</div>';
 }
+function funnel(label,val,pct){ return '<div class="funnel"><span class="fl">'+label+'</span><div class="fb" style="width:'+pct+'%">'+(val||0)+'</div></div>'; }
 
-window.__appendDebug && window.__appendDebug('[main-8] ANALYTICS defined');
-// ============================================================
 // PROFILE
+function renderProfile(m){
+  var u=state.user, extra='';
+  if(u.permissions.exportCsv) extra+='<button class="btn btn-light btn-block" onclick="exportCsv()">⬇ Export Candidates CSV</button>';
+  if(u.permissions.manageUsers) extra+='<button class="btn btn-light btn-block" onclick="openUsers()">👥 Manage Users</button>';
+  m.innerHTML='<div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 10px;width:64px;height:64px;font-size:28px">'+initials(u.name)+'</div>'+
+      '<h3 style="margin:0;font-weight:800">'+esc(u.name)+'</h3><div class="muted small">'+esc(u.email)+'</div>'+
+      '<span class="pill" style="margin-top:10px">'+esc(u.role)+'</span></div>'+
+    '<div class="stack" style="margin-top:14px">'+extra+'</div>'+
+    '<div class="card" style="margin-top:14px"><div class="section-title" style="margin:0 0 6px">Permissions</div>'+
+      Object.keys(u.permissions).map(function(k){ return '<div class="between small" style="padding:5px 0;border-bottom:1px solid #f1f5f9"><span>'+k+'</span><span>'+(u.permissions[k]?'✅':'—')+'</span></div>'; }).join('')+'</div>';
+}
+function exportCsv(){
+  api('exportCandidatesCsv').then(function(csv){
+    var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'})); a.download='candidates.csv'; a.click();
+  }).catch(function(e){ toast(e.message||'Failed.','err'); });
+}
+function openUsers(){
+  api('getUsers').then(function(users){
+    var body='<form onsubmit="addUserSubmit(event)" class="stack" style="margin-bottom:14px">'+
+      '<div class="row2"><div class="field"><label>Name</label><input name="Name"></div>'+
+      '<div class="field"><label>Email</label><input name="Email" type="email" required></div></div>'+
+      '<div class="field"><label>Role</label><select name="Role"><option>Admin</option><option>HR</option><option>Interviewer</option><option>Viewer</option></select></div>'+
+      '<button class="btn btn-block" type="submit">Add User</button></form>'+
+      users.map(function(u){ return '<div class="between card" style="padding:10px 12px;margin-bottom:8px;box-shadow:none;border:1px solid var(--line)"><div class="small"><strong>'+esc(u.Name||'')+'</strong> · '+
+        esc(u.Email)+' <span class="badge b-Interviewed">'+esc(u.Role)+'</span></div><button class="btn btn-danger btn-sm" onclick="removeUser(\''+u.UserID+'\')">🗑</button></div>'; }).join('');
+    openModal('Manage Users',body);
+  }).catch(function(e){ toast(e.message||'Failed.','err'); });
+}
+function addUserSubmit(e){ e.preventDefault(); api('addUser',formData(e.target)).then(function(){ toast('User added.'); openUsers(); }).catch(function(err){ toast(err.message||'Failed.','err'); }); }
+function removeUser(id){ if(!confirm('Remove this user?')) return; api('deleteUser',id).then(function(){ toast('User removed.'); openUsers(); }).catch(function(e){ toast(e.message||'Failed.','err'); }); }
+
 // ============================================================
-function renderProfile(m) {
-  const u = state.user;
-  let extra = '';
-  if (u.permissions.exportCsv) {
-    extra += `<button class="btn btn-outline-primary w-100 mb-2" onclick="exportCsv()"><i class="bi bi-download"></i> Export Candidates CSV</button>`;
-  }
-  if (u.permissions.manageUsers) {
-    extra += `<button class="btn btn-outline-secondary w-100 mb-2" onclick="openUserMgmt()"><i class="bi bi-people-fill"></i> Manage Users</button>`;
-  }
-  m.innerHTML = `
-    <div class="kpi-card p-4 text-center mb-3">
-      <i class="bi bi-person-circle" style="font-size:3rem;color:var(--brand)"></i>
-      <h5 class="mt-2 mb-0">${escapeHtml(u.name)}</h5>
-      <div class="text-muted small">${escapeHtml(u.email)}</div>
-      <span class="badge bg-primary mt-2">${u.role}</span>
-    </div>
-    ${extra}
-    <div class="kpi-card p-3">
-      <div class="label mb-2">Your Permissions</div>
-      ${Object.keys(u.permissions).map(k => `
-        <div class="d-flex justify-content-between small">
-          <span>${k}</span>
-          <span>${u.permissions[k] ? '<i class="bi bi-check-circle text-success"></i>' : '<i class="bi bi-x-circle text-muted"></i>'}</span>
-        </div>`).join('')}
-    </div>
-  `;
-}
-
-async function exportCsv() {
-  try {
-    const csv = await api('exportCandidatesCsv');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'candidates.csv';
-    a.click();
-  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
-}
-
-async function openUserMgmt() {
-  try {
-    const users = await api('getUsers');
-    const body = `
-      <h6>Add User</h6>
-      <form onsubmit="addUserSubmit(event)" class="mb-3">
-        <div class="row g-2">
-          <div class="col"><input class="form-control" name="Name" placeholder="Name"></div>
-          <div class="col"><input class="form-control" name="Email" type="email" placeholder="Email" required></div>
-          <div class="col"><select class="form-select" name="Role">
-            <option>Admin</option><option>HR</option><option>Interviewer</option><option>Viewer</option>
-          </select></div>
-        </div>
-        <button class="btn btn-primary btn-sm mt-2" type="submit">Add</button>
-      </form>
-      <h6>Existing Users</h6>
-      ${users.map(u => `
-        <div class="d-flex justify-content-between align-items-center border rounded p-2 mb-1">
-          <div class="small">
-            <strong>${escapeHtml(u.Name||'')}</strong> · ${escapeHtml(u.Email)}
-            <span class="badge bg-secondary">${u.Role}</span>
-          </div>
-          <button class="btn btn-sm btn-outline-danger" onclick="removeUser('${u.UserID}')"><i class="bi bi-trash"></i></button>
-        </div>`).join('')}
-    `;
-    document.getElementById('detailBody').innerHTML = body;
-    new bootstrap.Modal('#detailModal').show();
-  } catch (e) { toast(e.message || 'Failed.', 'danger'); }
-}
-
-async function addUserSubmit(e) {
-  e.preventDefault();
-  const fd = Object.fromEntries(new FormData(e.target).entries());
-  try { await api('addUser', fd); toast('User added.'); openUserMgmt(); }
-  catch (err) { toast(err.message || 'Failed.', 'danger'); }
-}
-
-async function removeUser(id) {
-  if (!confirm('Remove this user?')) return;
-  try { await api('deleteUser', id); toast('User removed.'); openUserMgmt(); }
-  catch (e) { toast(e.message || 'Failed.', 'danger'); }
-}
-
-window.__appendDebug && window.__appendDebug('[main-9] PROFILE defined');
+// ICONS (inline SVG line icons for the bottom nav)
 // ============================================================
-// HELPERS
-// ============================================================
-function escapeHtml(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  }[c]));
-}
-function escapeAttr(s) { return escapeHtml(s).replace(/'/g, '&#39;'); }
-function formatDate(d) {
-  if (!d) return '—';
-  const dt = new Date(d);
-  if (isNaN(dt)) return String(d);
-  return dt.toLocaleString();
+var ICONS={
+  home:'<svg viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10v9.5h13V10"/></svg>',
+  people:'<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><path d="M16.5 5.3a3 3 0 0 1 0 5.4"/><path d="M17.5 14.4a5.5 5.5 0 0 1 3 4.9"/></svg>',
+  calendar:'<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="16" rx="2.5"/><path d="M3.5 9h17M8 3v3M16 3v3"/><path d="M8.5 14.5l2.3 2.3 4-4.2"/></svg>',
+  chart:'<svg viewBox="0 0 24 24"><path d="M3 20.5h18"/><path d="M6 20.5v-6M11 20.5V8M16 20.5v-9"/></svg>',
+  user:'<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>'
+};
+function paintIcons(){
+  var spans=document.querySelectorAll('.ic[data-ic]');
+  for(var i=0;i<spans.length;i++){ var n=spans[i].getAttribute('data-ic'); if(ICONS[n]) spans[i].innerHTML=ICONS[n]; }
 }
 
 // ============================================================
-// SERVICE WORKER REGISTRATION (PWA)
+// AUTO-START
 // ============================================================
-function registerSw() {
-  // Service worker registration intentionally disabled.
-  // Apps Script's userContent.google.com sandbox makes SW behavior
-  // unreliable and previously cached responses can mask new deploys.
-  // If a SW from an earlier build is still active, kill it.
-  if (!('serviceWorker' in navigator)) return;
-  try {
-    navigator.serviceWorker.getRegistrations().then(regs => {
-      regs.forEach(r => r.unregister());
-    }).catch(() => {});
-  } catch (e) {}
-}
-
-window.__appendDebug && window.__appendDebug('[main-10] all sections defined; calling bootApp()');
-// Initial boot
-bootApp();
-window.__appendDebug && window.__appendDebug('[main-11] bootApp() invocation returned (async)');
+paintIcons();
+boot();
 </script>
 </body>
 </html>
