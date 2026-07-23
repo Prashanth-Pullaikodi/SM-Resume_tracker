@@ -1,170 +1,107 @@
+
+  //SPREADSHEET_ID: '1oqs__qWVG1DWC5FoBI3LugVBG_lLgUAoXUNV38CfIbM', // Leave blank to use the bound spreadsheet (recommended)
+  //RESUMES_FOLDER_ID: '1ksNJzhqBofXbAAh3RsXOkGf9ke4O-eTd',
+
+
 /**
- * Resort Recruitment System - Backend
- * Google Apps Script Web App
+ * Resort Recruitment System — Backend
+ * Google Apps Script Web App + Google Sheets.
  *
- * Deployment: Deploy as Web App, "Execute as: User accessing the web app",
- * "Who has access: Anyone within <your domain>" (or as appropriate).
+ * SETUP (once):
+ *  1. Create a Google Sheet, open Extensions > Apps Script.
+ *  2. Paste Code.gs, create an HTML file named "Index", paste Index.html.
+ *  3. Project Settings > show appsscript.json > paste appsscript.json.
+ *     (This also enables the Advanced Drive Service used for resume parsing.)
+ *  4. Run initialSetup() once and grant access.
+ *  5. Deploy > New deployment > Web app (see README for execute-as guidance).
  */
 
-// ============================================================
-// CONFIGURATION
-// ============================================================
 var CONFIG = {
-  SPREADSHEET_ID: '', // Leave blank to use the bound spreadsheet (recommended)
+  SPREADSHEET_ID: '1oqs__qWVG1DWC5FoBI3LugVBG_lLgUAoXUNV38CfIbM', // blank = use the bound spreadsheet
   SHEETS: {
     CANDIDATES: 'Candidates',
     INTERVIEWS: 'Interviews',
-    STATUS_HISTORY: 'StatusHistory',
     USERS: 'Users',
     AUDIT_LOG: 'AuditLog'
   },
   STATUSES: ['New', 'Not Screened', 'Shortlisted', 'Interviewed', 'Selected', 'Rejected', 'On Hold'],
   ROLES: ['Admin', 'HR', 'Interviewer', 'Viewer'],
-
-  // ---- Drive upload settings --------------------------------------------
-  // Paste the ID of the Drive folder where all resumes should be saved.
-  // Get it from the folder URL: https://drive.google.com/drive/folders/<THIS_PART>
-  // If left blank, a folder named RESUMES_FOLDER_NAME is auto-created in
-  // the script owner's "My Drive" root on first upload.
-  RESUMES_FOLDER_ID: '',
-  RESUMES_FOLDER_NAME: 'Resort Recruitment Resumes',
-  MAX_UPLOAD_BYTES: 25 * 1024 * 1024, // 25 MB hard cap per resume
-
-  // Cache TTL for the bootstrap payload (seconds). Writes invalidate the
-  // cache, so this is just an upper bound for stale-reads from other tabs.
-  CACHE_TTL_SECONDS: 300,
-  CACHE_KEY_BOOT: 'boot_v2',
-  CACHE_KEY_USER_ROLE: 'role_v1_'
+  RESUMES_FOLDER_ID: '1Y2Q8j3N8DR_GyxNrSW-XLPyz6cuoBZYf',
+  MAX_UPLOAD_BYTES: 20 * 1024 * 1024
 };
 
 // ============================================================
-// WEB APP ENTRY POINTS
+// WEB APP ENTRY POINT
 // ============================================================
 function doGet(e) {
-  var t0 = new Date().getTime();
-  // Logger.log lines show up in Apps Script -> Executions (works even
-  // when the browser tab never renders anything).
-  Logger.log('doGet ▶ start params=%s', JSON.stringify(e && e.parameter || {}));
-
   try {
-    var page = (e && e.parameter && e.parameter.page) ? e.parameter.page : 'index';
-    Logger.log('doGet route=%s', page);
-
-    if (page === 'manifest') {
-      Logger.log('doGet -> manifest');
-      var mj = getManifestJson();
-      Logger.log('doGet manifest length=%s ms=%s', mj.length, new Date().getTime() - t0);
-      return ContentService
-        .createTextOutput(mj)
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-    if (page === 'sw') {
-      Logger.log('doGet -> service worker');
-      var sw = getServiceWorkerJs();
-      Logger.log('doGet sw length=%s ms=%s', sw.length, new Date().getTime() - t0);
-      return ContentService
-        .createTextOutput(sw)
-        .setMimeType(ContentService.MimeType.JAVASCRIPT);
-    }
-
-    Logger.log('doGet creating template "Index"');
-    var t;
-    try { t = HtmlService.createTemplateFromFile('Index'); }
-    catch (err) {
-      Logger.log('doGet TEMPLATE LOAD FAILED: %s', err && err.message);
-      throw err;
-    }
-
-    try { t.webAppUrl = ScriptApp.getService().getUrl(); }
-    catch (err) { Logger.log('doGet getUrl failed (non-fatal): %s', err && err.message); }
-
-    Logger.log('doGet evaluating template');
-    var output;
-    try { output = t.evaluate(); }
-    catch (err) {
-      Logger.log('doGet TEMPLATE EVAL FAILED: %s\nstack=%s', err && err.message, err && err.stack);
-      throw err;
-    }
-
-    output
-      .setTitle('Resort Recruitment')
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no');
-
-    Logger.log('doGet ✔ served HTML in %sms', new Date().getTime() - t0);
-    // Mirror to the in-memory log buffer too so getServerLogs() shows it.
-    try { slog_('doGet', 'served', { ms: new Date().getTime() - t0, route: page }); } catch (e) {}
-    return output;
-
+    return HtmlService.createTemplateFromFile('Index').evaluate()
+      .setTitle('SM Recruitment')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   } catch (err) {
-    Logger.log('doGet ✖ FAILED: %s\nstack=%s', err && err.message, err && err.stack);
-    try { slog_('doGet', 'FAILED', { err: err && err.message }); } catch (e) {}
-
-    // Return a self-contained HTML error page so the browser sees SOMETHING
-    // useful instead of a blank tab or Apps Script's generic crash screen.
     return HtmlService.createHtmlOutput(
       '<!doctype html><html><body style="font-family:system-ui;padding:30px;color:#0f172a">' +
-      '<h2 style="color:#dc2626">Server error in doGet</h2>' +
-      '<p>' + (err && err.message ? escapeHtmlServer_(err.message) : 'Unknown error') + '</p>' +
-      '<p style="color:#64748b;font-size:.85rem">Open Apps Script → Executions to see the full trace. ' +
-      'Most common cause: required HTML file (Index / Manifest / ServiceWorker) missing or named differently.</p>' +
-      '<pre style="background:#f1f5f9;padding:12px;border-radius:6px;overflow:auto;font-size:.75rem">' +
-      escapeHtmlServer_((err && err.stack) || '') + '</pre>' +
-      '</body></html>'
+      '<h2 style="color:#dc2626">Server error</h2><p>' +
+      escapeHtmlServer_(err && err.message ? err.message : 'Unknown error') +
+      '</p><p style="color:#64748b">Most common cause: the HTML file is not named exactly <b>Index</b>, ' +
+      'or initialSetup() was never run. See README.</p></body></html>'
     );
   }
 }
 
-function escapeHtmlServer_(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+// ============================================================
+// AUTHORIZATION
+// ============================================================
+function authorize() {
+  var out = {};
+  try { out.email = getActiveEmail_(); } catch (e) { out.emailErr = e.message; }
+  try { out.spreadsheet = getSpreadsheet_().getName(); } catch (e) { out.sheetErr = e.message; }
+  try { out.driveFolder = getResumesFolder_().getName(); } catch (e) { out.driveErr = e.message; }
+  Logger.log('authorize() -> %s', JSON.stringify(out));
+  return out;
 }
 
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+function ping() {
+  return { ok: true, time: nowIso_(), user: getActiveEmail_() };
 }
 
 // ============================================================
-// SHEET HELPERS
+// HELPERS
 // ============================================================
 function getSpreadsheet_() {
   if (CONFIG.SPREADSHEET_ID) return SpreadsheetApp.openById(CONFIG.SPREADSHEET_ID);
   var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (!ss) throw new Error('No active spreadsheet. Set CONFIG.SPREADSHEET_ID or bind script to a sheet.');
+  if (!ss) throw new Error('No bound spreadsheet. Bind the script to a Sheet or set CONFIG.SPREADSHEET_ID.');
   return ss;
 }
-
 function getSheet_(name) {
-  var ss = getSpreadsheet_();
-  var sh = ss.getSheetByName(name);
-  if (!sh) throw new Error('Sheet "' + name + '" not found. Run setupSheets().');
+  var sh = getSpreadsheet_().getSheetByName(name);
+  if (!sh) throw new Error('Sheet "' + name + '" not found. Run initialSetup().');
   return sh;
 }
-
+function getResumesFolder_() {
+  try { return DriveApp.getFolderById(CONFIG.RESUMES_FOLDER_ID); }
+  catch (e) { throw new Error('Cannot access resumes folder ' + CONFIG.RESUMES_FOLDER_ID + ': ' + e.message); }
+}
 function sheetToObjects_(sheet) {
   var values = sheet.getDataRange().getValues();
   if (values.length < 2) return [];
-  var headers = values[0];
-  var rows = [];
+  var headers = values[0], rows = [];
   for (var i = 1; i < values.length; i++) {
+    if (values[i][0] === '' || values[i][0] === null) continue;
     var row = {};
     for (var j = 0; j < headers.length; j++) {
       var v = values[i][j];
-      // Coerce Date cells to ISO strings — google.script.run sometimes
-      // serializes Date objects unreliably across the postMessage bridge,
-      // which can result in an empty/undefined response on the client.
       if (Object.prototype.toString.call(v) === '[object Date]') {
         v = isNaN(v.getTime()) ? '' : v.toISOString();
       }
       row[headers[j]] = v;
     }
-    if (row[headers[0]] === '' || row[headers[0]] === null) continue;
     rows.push(row);
   }
   return rows;
 }
-
 function findRowByKey_(sheet, keyCol, keyVal) {
   var values = sheet.getDataRange().getValues();
   for (var i = 1; i < values.length; i++) {
@@ -172,689 +109,553 @@ function findRowByKey_(sheet, keyCol, keyVal) {
   }
   return -1;
 }
-
-function uuid_() {
-  return Utilities.getUuid();
-}
-
-function nowIso_() {
-  return new Date().toISOString();
-}
-
-// ============================================================
-// SERVER-SIDE LOG BUFFER
-// Persisted in ScriptProperties so the frontend can fetch the last
-// ~50 lines via getServerLogs(). Also writes to Logger so they appear
-// in the Apps Script Executions panel.
-// ============================================================
-var LOG_KEY_ = 'srv_log_v1';
-var LOG_MAX_ = 80;
-
-function slog_(tag, msg, obj) {
-  var ts = new Date().toISOString();
-  var line = ts + ' ' + tag + ' ' + msg;
-  if (obj !== undefined) {
-    try { line += ' ' + JSON.stringify(obj); }
-    catch (e) { line += ' [unserializable: ' + e.message + ']'; }
-  }
-  try { Logger.log(line); } catch (e) {}
-  try { console.log(line); } catch (e) {}
-  try {
-    var props = PropertiesService.getScriptProperties();
-    var raw = props.getProperty(LOG_KEY_);
-    var arr = raw ? JSON.parse(raw) : [];
-    arr.push(line);
-    if (arr.length > LOG_MAX_) arr = arr.slice(-LOG_MAX_);
-    props.setProperty(LOG_KEY_, JSON.stringify(arr));
-  } catch (e) { /* don't let logging itself crash a call */ }
-}
-
-function getServerLogs() {
-  try {
-    var raw = PropertiesService.getScriptProperties().getProperty(LOG_KEY_);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) { return ['[log fetch error: ' + e.message + ']']; }
-}
-
-function clearServerLogs() {
-  try { PropertiesService.getScriptProperties().deleteProperty(LOG_KEY_); }
-  catch (e) {}
-  return 'ok';
-}
-
-// ============================================================
-// DIAGNOSTICS — run these from the Apps Script editor to verify
-// the backend is healthy without touching the web UI.
-// ============================================================
-
-/** Quick smoke test. Run from editor → View → Logs. */
-function ping() {
-  var t0 = new Date().getTime();
-  slog_('ping', 'start');
-  var ss;
-  try { ss = getSpreadsheet_(); slog_('ping', 'got spreadsheet', { name: ss.getName() }); }
-  catch (e) { slog_('ping', 'NO SPREADSHEET', { err: e.message }); return { ok:false, error: e.message }; }
-
+function uuid_() { return Utilities.getUuid(); }
+function nowIso_() { return new Date().toISOString(); }
+function getActiveEmail_() {
   var email = '';
-  try {
-    email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    slog_('ping', 'got email', { email: email });
-  } catch (e) { slog_('ping', 'NO EMAIL', { err: e.message }); }
+  try { email = Session.getActiveUser().getEmail(); } catch (e) {}
+  if (!email) { try { email = Session.getEffectiveUser().getEmail(); } catch (e) {} }
+  return email || '';
+}
+function escapeHtmlServer_(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function safeFileName_(s) { return String(s || 'resume').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80); }
 
-  var sheetsOk = {};
-  Object.keys(CONFIG.SHEETS).forEach(function(k){
-    sheetsOk[k] = !!ss.getSheetByName(CONFIG.SHEETS[k]);
-  });
-  slog_('ping', 'sheets check', sheetsOk);
-
-  var out = {
-    ok: true,
-    elapsedMs: new Date().getTime() - t0,
-    user: email,
-    spreadsheetId: ss.getId(),
-    spreadsheetName: ss.getName(),
-    sheets: sheetsOk
-  };
-  slog_('ping', 'done', { ms: out.elapsedMs });
-  return out;
+// Short content hash (first 12 hex of MD5) for duplicate-file detection.
+function hashBytes_(bytes) {
+  var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, bytes);
+  var hex = digest.map(function (b) { return ('0' + (b & 0xff).toString(16)).slice(-2); }).join('');
+  return hex.slice(0, 12);
+}
+// Look for an existing file in the folder whose name carries the same hash tag.
+function findFileByHash_(folder, hash) {
+  var it = folder.searchFiles('title contains "h-' + hash + '"');
+  while (it.hasNext()) {
+    var f = it.next();
+    if (!f.isTrashed() && f.getName().indexOf('h-' + hash) !== -1) return f;
+  }
+  return null;
 }
 
-/** Times a real bootstrap call and logs the result. */
-function pingBootstrap() {
-  var t0 = new Date().getTime();
-  var res = bootstrapApp();
-  var ms = new Date().getTime() - t0;
-  Logger.log('bootstrapApp took ' + ms + 'ms; authorized=' +
-             (res && res.user && res.user.authorized) +
-             '; candidates=' + (res && res.candidates ? res.candidates.length : 'n/a'));
-  return { elapsedMs: ms, authorized: res && res.user && res.user.authorized };
-}
-
-/** Wipe both caches. Useful after manually editing the sheets. */
-function clearAllCaches() {
-  var c = CacheService.getScriptCache();
-  c.remove(CONFIG.CACHE_KEY_BOOT);
-  // No way to enumerate cache keys; clear is best-effort.
-  Logger.log('Bootstrap cache cleared.');
-  return 'ok';
+// ---- Field validation ----
+function validEmail_(s) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(s || '').trim()); }
+function validPhone_(s) {
+  var d = String(s || '').replace(/[^\d]/g, '');
+  return d.length >= 7 && d.length <= 15;
 }
 
 // ============================================================
-// SETUP (run once)
+// SETUP
 // ============================================================
-function setupSheets() {
+function initialSetup() {
   var ss = getSpreadsheet_();
   var defs = {
-    'Candidates': ['CandidateID','Name','Phone','Email','RoleApplied','ResumeLink','Source','Status','CreatedAt'],
-    'Interviews': ['InterviewID','CandidateID','Round','Interviewer','DateTime','Status','Feedback','Score'],
-    'StatusHistory': ['LogID','CandidateID','OldStatus','NewStatus','ChangedBy','Timestamp'],
-    'Users': ['UserID','Name','Email','Role'],
-    'AuditLog': ['LogID','Email','Action','Details','Timestamp']
+    'Candidates': ['CandidateID', 'Name', 'Phone', 'Email', 'RoleApplied', 'ResumeLink', 'Source', 'Status', 'CreatedAt'],
+    'Interviews': ['InterviewID', 'CandidateID', 'Round', 'Interviewer', 'DateTime', 'Status', 'Feedback', 'Score'],
+    'Users': ['UserID', 'Name', 'Email', 'Role'],
+    'AuditLog': ['LogID', 'Email', 'Action', 'Details', 'Timestamp']
   };
-  Object.keys(defs).forEach(function(name) {
-    var sh = ss.getSheetByName(name);
-    if (!sh) sh = ss.insertSheet(name);
-    var existing = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
-    if (existing.join('') === '') {
+  Object.keys(defs).forEach(function (name) {
+    var sh = ss.getSheetByName(name) || ss.insertSheet(name);
+    var first = sh.getRange(1, 1, 1, Math.max(1, sh.getLastColumn())).getValues()[0];
+    if (first.join('') === '') {
       sh.getRange(1, 1, 1, defs[name].length).setValues([defs[name]]);
       sh.setFrozenRows(1);
-      sh.getRange(1, 1, 1, defs[name].length).setFontWeight('bold').setBackground('#0d6efd').setFontColor('#ffffff');
+      sh.getRange(1, 1, 1, defs[name].length).setFontWeight('bold')
+        .setBackground('#6366f1').setFontColor('#ffffff');
     }
   });
+  var users = ss.getSheetByName('Users');
+  var adminEmail = getActiveEmail_() || 'admin@example.com';
+  if (users.getLastRow() < 2) users.appendRow([uuid_(), 'Admin User', adminEmail, 'Admin']);
 
-  // Seed first admin user with the current account if Users sheet empty
-  var usersSheet = ss.getSheetByName('Users');
-  if (usersSheet.getLastRow() < 2) {
-    var email = Session.getActiveUser().getEmail() || Session.getEffectiveUser().getEmail();
-    if (email) {
-      usersSheet.appendRow([uuid_(), 'Admin User', email, 'Admin']);
-    }
+  var cand = ss.getSheetByName('Candidates');
+  if (cand.getLastRow() < 2) {
+    var now = new Date();
+    function daysAgo(n) { return new Date(now.getTime() - n * 864e5).toISOString(); }
+    var ids = {};
+    ['arjun', 'meera', 'sandeep', 'kavya', 'rohit', 'neha', 'farhan', 'divya'].forEach(function (k) { ids[k] = uuid_(); });
+    cand.getRange(2, 1, 8, 9).setValues([
+      [ids.arjun, 'Arjun Nair', '+919812340001', 'arjun.nair@example.com', 'Front Desk Executive', '', 'Naukri', 'Selected', daysAgo(40)],
+      [ids.meera, 'Meera Iyer', '+919812340002', 'meera.iyer@example.com', 'Housekeeping Supervisor', '', 'Referral', 'Interviewed', daysAgo(25)],
+      [ids.sandeep, 'Sandeep Kumar', '+919812340003', 'sandeep.k@example.com', 'Chef de Partie', '', 'Walk-in', 'Shortlisted', daysAgo(15)],
+      [ids.kavya, 'Kavya Reddy', '+919812340004', 'kavya.reddy@example.com', 'Spa Therapist', '', 'LinkedIn', 'Not Screened', daysAgo(8)],
+      [ids.rohit, 'Rohit Sharma', '+919812340005', 'rohit.sharma@example.com', 'F&B Manager', '', 'Referral', 'Rejected', daysAgo(35)],
+      [ids.neha, 'Neha Pillai', '+919812340006', 'neha.pillai@example.com', 'Front Desk Executive', '', 'Naukri', 'Not Screened', daysAgo(3)],
+      [ids.farhan, 'Farhan Ahmed', '+919812340007', 'farhan.a@example.com', 'Sous Chef', '', 'Indeed', 'New', daysAgo(2)],
+      [ids.divya, 'Divya Menon', '+919812340008', 'divya.menon@example.com', 'Guest Relations', '', 'Walk-in', 'On Hold', daysAgo(20)]
+    ]);
+    var iv = ss.getSheetByName('Interviews');
+    iv.getRange(2, 1, 4, 8).setValues([
+      [uuid_(), ids.arjun, 'HR', adminEmail, daysAgo(35), 'Completed', 'Strong hospitality fit.', 9],
+      [uuid_(), ids.meera, 'HR', adminEmail, daysAgo(20), 'Completed', 'Solid experience.', 8],
+      [uuid_(), ids.sandeep, 'Technical', adminEmail, daysAgo(10), 'Completed', 'Good knife skills.', 7],
+      [uuid_(), ids.farhan, 'Technical', adminEmail, new Date(now.getTime() + 2 * 864e5).toISOString(), 'Scheduled', '', '']
+    ]);
   }
   return 'Setup complete.';
 }
 
 // ============================================================
-// INITIAL SETUP — run once from the Apps Script editor.
-// Creates sheets + headers, seeds you as Admin, then populates
-// sample users, candidates, interviews, and status history so the
-// dashboard and analytics screens have something to show.
-// Safe to re-run: it skips seeding if data already exists.
-// ============================================================
-function initialSetup() {
-  setupSheets();
-  var ss = getSpreadsheet_();
-
-  var usersSheet = ss.getSheetByName(CONFIG.SHEETS.USERS);
-  var candSheet  = ss.getSheetByName(CONFIG.SHEETS.CANDIDATES);
-  var ivSheet    = ss.getSheetByName(CONFIG.SHEETS.INTERVIEWS);
-  var histSheet  = ss.getSheetByName(CONFIG.SHEETS.STATUS_HISTORY);
-  var auditSheet = ss.getSheetByName(CONFIG.SHEETS.AUDIT_LOG);
-
-  var adminEmail = Session.getActiveUser().getEmail() ||
-                   Session.getEffectiveUser().getEmail() ||
-                   'admin@example.com';
-
-  // -------- Sample Users (skip if already populated beyond the admin row) --------
-  if (usersSheet.getLastRow() < 3) {
-    var sampleUsers = [
-      [uuid_(), 'Priya HR',        'priya.hr@example.com',        'HR'],
-      [uuid_(), 'Rahul Manager',   'rahul.manager@example.com',   'Interviewer'],
-      [uuid_(), 'Anita Chef',      'anita.chef@example.com',      'Interviewer'],
-      [uuid_(), 'Vikram Viewer',   'vikram.viewer@example.com',   'Viewer']
-    ];
-    usersSheet.getRange(usersSheet.getLastRow() + 1, 1, sampleUsers.length, 4)
-              .setValues(sampleUsers);
-  }
-
-  // -------- Sample Candidates --------
-  if (candSheet.getLastRow() < 2) {
-    var now = new Date();
-    function daysAgo(n) {
-      var d = new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
-      return d.toISOString();
-    }
-    var candIds = {
-      arjun:   uuid_(),
-      meera:   uuid_(),
-      sandeep: uuid_(),
-      kavya:   uuid_(),
-      rohit:   uuid_(),
-      neha:    uuid_(),
-      farhan:  uuid_(),
-      divya:   uuid_(),
-      kiran:   uuid_(),
-      sneha:   uuid_()
-    };
-    var sampleCandidates = [
-      [candIds.arjun,   'Arjun Nair',       '+919812340001', 'arjun.nair@example.com',    'Front Desk Executive', 'https://drive.google.com/file/d/sample-arjun',  'Naukri',   'Selected',     daysAgo(40)],
-      [candIds.meera,   'Meera Iyer',       '+919812340002', 'meera.iyer@example.com',    'Housekeeping Supervisor','https://drive.google.com/file/d/sample-meera', 'Referral', 'Interviewed',  daysAgo(25)],
-      [candIds.sandeep, 'Sandeep Kumar',    '+919812340003', 'sandeep.k@example.com',     'Chef de Partie',       'https://drive.google.com/file/d/sample-sandeep','Walk-in',  'Shortlisted',  daysAgo(15)],
-      [candIds.kavya,   'Kavya Reddy',      '+919812340004', 'kavya.reddy@example.com',   'Spa Therapist',        'https://drive.google.com/file/d/sample-kavya',  'LinkedIn', 'Not Screened', daysAgo(8)],
-      [candIds.rohit,   'Rohit Sharma',     '+919812340005', 'rohit.sharma@example.com',  'F&B Manager',          'https://drive.google.com/file/d/sample-rohit',  'Referral', 'Rejected',     daysAgo(35)],
-      [candIds.neha,    'Neha Pillai',      '+919812340006', 'neha.pillai@example.com',   'Front Desk Executive', 'https://drive.google.com/file/d/sample-neha',   'Naukri',   'Not Screened', daysAgo(3)],
-      [candIds.farhan,  'Farhan Ahmed',     '+919812340007', 'farhan.a@example.com',      'Sous Chef',            'https://drive.google.com/file/d/sample-farhan', 'Indeed',   'New',          daysAgo(2)],
-      [candIds.divya,   'Divya Menon',      '+919812340008', 'divya.menon@example.com',   'Guest Relations',      'https://drive.google.com/file/d/sample-divya',  'Walk-in',  'On Hold',      daysAgo(20)],
-      [candIds.kiran,   'Kiran Bose',       '+919812340009', 'kiran.bose@example.com',    'Housekeeping Supervisor','https://drive.google.com/file/d/sample-kiran', 'Referral', 'Interviewed',  daysAgo(18)],
-      [candIds.sneha,   'Sneha Krishnan',   '+919812340010', 'sneha.k@example.com',       'Spa Therapist',        'https://drive.google.com/file/d/sample-sneha',  'LinkedIn', 'New',          daysAgo(1)]
-    ];
-    candSheet.getRange(candSheet.getLastRow() + 1, 1, sampleCandidates.length, 9)
-             .setValues(sampleCandidates);
-
-    // -------- Sample Interviews (linked to the candidates above) --------
-    function inDays(n) {
-      var d = new Date(now.getTime() + n * 24 * 60 * 60 * 1000);
-      return d.toISOString();
-    }
-    var sampleInterviews = [
-      [uuid_(), candIds.arjun,   'HR',        'priya.hr@example.com',      daysAgo(35), 'Completed', 'Excellent communication, strong hospitality fit.', 9],
-      [uuid_(), candIds.arjun,   'Manager',   'rahul.manager@example.com', daysAgo(30), 'Completed', 'Recommended for selection.',                       9],
-      [uuid_(), candIds.meera,   'HR',        'priya.hr@example.com',      daysAgo(20), 'Completed', 'Solid housekeeping experience.',                   8],
-      [uuid_(), candIds.meera,   'Manager',   'rahul.manager@example.com', daysAgo(15), 'Completed', 'Awaiting reference check.',                        7],
-      [uuid_(), candIds.sandeep, 'Technical', 'anita.chef@example.com',    daysAgo(10), 'Completed', 'Good knife skills, needs training in plating.',     7],
-      [uuid_(), candIds.rohit,   'HR',        'priya.hr@example.com',      daysAgo(32), 'Completed', 'Did not meet salary expectations.',                 5],
-      [uuid_(), candIds.kiran,   'HR',        'priya.hr@example.com',      daysAgo(14), 'Completed', 'Polite, organized.',                                8],
-      [uuid_(), candIds.kiran,   'Manager',   'rahul.manager@example.com', daysAgo(12), 'Completed', 'Shortlisted pending manager approval.',             8],
-      [uuid_(), candIds.farhan,  'Technical', 'anita.chef@example.com',    inDays(2),   'Scheduled', '',                                                  ''],
-      [uuid_(), candIds.sneha,   'HR',        'priya.hr@example.com',      inDays(3),   'Scheduled', '',                                                  '']
-    ];
-    ivSheet.getRange(ivSheet.getLastRow() + 1, 1, sampleInterviews.length, 8)
-           .setValues(sampleInterviews);
-
-    // -------- Sample Status History --------
-    var sampleHistory = [
-      [uuid_(), candIds.arjun,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(38)],
-      [uuid_(), candIds.arjun,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(30)],
-      [uuid_(), candIds.arjun,   'Interviewed',  'Selected',     adminEmail,             daysAgo(28)],
-      [uuid_(), candIds.meera,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(22)],
-      [uuid_(), candIds.meera,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(15)],
-      [uuid_(), candIds.rohit,   'Interviewed',  'Rejected',     'priya.hr@example.com', daysAgo(31)],
-      [uuid_(), candIds.kiran,   'New',          'Shortlisted',  'priya.hr@example.com', daysAgo(16)],
-      [uuid_(), candIds.kiran,   'Shortlisted',  'Interviewed',  'priya.hr@example.com', daysAgo(12)]
-    ];
-    histSheet.getRange(histSheet.getLastRow() + 1, 1, sampleHistory.length, 6)
-             .setValues(sampleHistory);
-
-    // -------- Audit Log entry --------
-    auditSheet.appendRow([uuid_(), adminEmail, 'initialSetup',
-                          JSON.stringify({ seeded: { users: 4, candidates: 10, interviews: 10 } }),
-                          nowIso_()]);
-
-    return 'Initial setup complete. Sample data seeded.';
-  }
-
-  return 'Initial setup complete. Sheets ready (sample data already present, skipped).';
-}
-
-// ============================================================
 // AUTH / RBAC
 // ============================================================
-/**
- * One-shot bootstrap that returns the user + all dashboards' data in a
- * single google.script.run round trip. Cuts navigation latency by ~3x
- * because the frontend no longer needs a separate call per view.
- */
-// ---- Cache helpers ----------------------------------------------------
-function getCache_() { return CacheService.getScriptCache(); }
-
-function invalidateBootCache_() {
-  try { getCache_().remove(CONFIG.CACHE_KEY_BOOT); } catch (e) {}
+function getCurrentUser() {
+  var email = getActiveEmail_();
+  if (!email) return { authorized: false, message: 'Unable to detect your Google account.' };
+  var users = sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
+  var me = null;
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].Email).toLowerCase() === email.toLowerCase()) { me = users[i]; break; }
+  }
+  if (!me && users.length === 0) me = { Name: email, Email: email, Role: 'Admin' };
+  if (!me) return { authorized: false, email: email, message: 'Access denied. ' + email + ' is not a registered user.' };
+  return { authorized: true, email: email, name: me.Name || email, role: me.Role, permissions: rolePermissions_(me.Role) };
+}
+function rolePermissions_(role) {
+  switch (role) {
+    case 'Admin': return { manageUsers: true, addCandidate: true, editCandidate: true, scheduleInterview: true, addFeedback: true, changeStatus: true, exportCsv: true };
+    case 'HR': return { manageUsers: false, addCandidate: true, editCandidate: true, scheduleInterview: true, addFeedback: true, changeStatus: true, exportCsv: false };
+    case 'Interviewer': return { manageUsers: false, addCandidate: false, editCandidate: false, scheduleInterview: false, addFeedback: true, changeStatus: false, exportCsv: false };
+    case 'Viewer': return { manageUsers: false, addCandidate: false, editCandidate: false, scheduleInterview: false, addFeedback: false, changeStatus: false, exportCsv: false };
+    default: return {};
+  }
+}
+function authorizeUser_(requiredRoles) {
+  var info = getCurrentUser();
+  if (!info.authorized) throw new Error(info.message || 'Access denied.');
+  if (requiredRoles && requiredRoles.length && requiredRoles.indexOf(info.role) === -1) {
+    throw new Error('Access denied: requires ' + requiredRoles.join(' or ') + '.');
+  }
+  return info;
+}
+function logAudit_(email, action, details) {
+  try { getSheet_(CONFIG.SHEETS.AUDIT_LOG).appendRow([uuid_(), email, action, JSON.stringify(details || {}), nowIso_()]); }
+  catch (e) {}
 }
 
+// ============================================================
+// BOOTSTRAP
+// ============================================================
 function bootstrapApp() {
-  var t0 = new Date().getTime();
-  slog_('bootstrap', 'start');
-  try {
-    var cache = getCache_();
-    var cached = null;
-    try { cached = cache.get(CONFIG.CACHE_KEY_BOOT); } catch (e) {
-      slog_('bootstrap', 'cache.get failed', { err: e.message });
-    }
-    if (cached) {
-      slog_('bootstrap', 'cache HIT', { bytes: cached.length });
-      try {
-        var payload = JSON.parse(cached);
-        payload.user = getCurrentUser();
-        if (!payload.user.authorized) {
-          slog_('bootstrap', 'cached but user no longer authorized');
-          return { user: payload.user };
-        }
-        payload.cached = true;
-        slog_('bootstrap', 'done from cache', { ms: new Date().getTime() - t0 });
-        return payload;
-      } catch (e) {
-        slog_('bootstrap', 'cache parse failed, falling through', { err: e.message });
-      }
-    } else {
-      slog_('bootstrap', 'cache MISS');
-    }
-
-    var fresh = bootstrapAppImpl_();
-    if (fresh && fresh.user && fresh.user.authorized) {
-      try {
-        var json = JSON.stringify(fresh);
-        slog_('bootstrap', 'serialized', { bytes: json.length });
-        if (json.length < 95000) {
-          cache.put(CONFIG.CACHE_KEY_BOOT, json, CONFIG.CACHE_TTL_SECONDS);
-          slog_('bootstrap', 'cache stored');
-        } else {
-          slog_('bootstrap', 'payload too large for cache, skipped');
-        }
-      } catch (e) {
-        slog_('bootstrap', 'cache.put failed', { err: e.message });
-      }
-    }
-    slog_('bootstrap', 'done fresh', {
-      ms: new Date().getTime() - t0,
-      candidates: fresh && fresh.candidates ? fresh.candidates.length : 0,
-      interviews: fresh && fresh.interviews ? fresh.interviews.length : 0
-    });
-    return fresh;
-  } catch (e) {
-    slog_('bootstrap', 'FATAL', { err: e.message, stack: e.stack });
-    // Surface server-side errors as an authorized=false payload so the
-    // frontend can render a useful message instead of going blank.
-    return {
-      user: {
-        authorized: false,
-        message: 'Server error: ' + (e && e.message ? e.message : e) +
-                 '. Run initialSetup() from the Apps Script editor.'
-      }
-    };
-  }
-}
-
-function bootstrapAppImpl_() {
-  slog_('bootImpl', 'getCurrentUser');
   var user = getCurrentUser();
-  slog_('bootImpl', 'user', { authorized: user.authorized, role: user.role });
   if (!user.authorized) return { user: user };
-
-  slog_('bootImpl', 'reading Candidates sheet');
   var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  slog_('bootImpl', 'read Candidates', { rows: candidates.length });
-
-  slog_('bootImpl', 'reading Interviews sheet');
   var interviews = sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS));
-  slog_('bootImpl', 'read Interviews', { rows: interviews.length });
-
-  // RBAC: Interviewers only see their assigned candidates / interviews.
   if (user.role === 'Interviewer') {
-    var emailLc = String(user.email).toLowerCase();
-    var assignedIds = {};
-    interviews = interviews.filter(function(i){
-      var keep = String(i.Interviewer).toLowerCase() === emailLc;
-      if (keep) assignedIds[i.CandidateID] = true;
-      return keep;
+    var mine = {};
+    interviews = interviews.filter(function (i) {
+      var keep = String(i.Interviewer).toLowerCase() === user.email.toLowerCase();
+      if (keep) mine[i.CandidateID] = true; return keep;
     });
-    candidates = candidates.filter(function(c){ return assignedIds[c.CandidateID]; });
+    candidates = candidates.filter(function (c) { return mine[c.CandidateID]; });
   }
-
-  // Build KPIs and analytics from already-loaded data — no extra sheet reads.
-  var statusCounts = {};
-  CONFIG.STATUSES.forEach(function(s){ statusCounts[s] = 0; });
+  var counts = {}; CONFIG.STATUSES.forEach(function (s) { counts[s] = 0; });
   var roleMap = {};
-  candidates.forEach(function(c){
-    if (statusCounts[c.Status] !== undefined) statusCounts[c.Status]++;
+  candidates.forEach(function (c) {
+    if (counts[c.Status] !== undefined) counts[c.Status]++;
     var r = c.RoleApplied || 'Unspecified';
-    if (!roleMap[r]) roleMap[r] = { role: r, total: 0, selected: 0, rejected: 0 };
+    if (!roleMap[r]) roleMap[r] = { role: r, total: 0, selected: 0 };
     roleMap[r].total++;
     if (c.Status === 'Selected') roleMap[r].selected++;
-    if (c.Status === 'Rejected') roleMap[r].rejected++;
   });
-
   var total = candidates.length || 1;
-  var screenedOrBeyond = statusCounts['Shortlisted'] + statusCounts['Interviewed'] +
-                         statusCounts['Selected'] + statusCounts['Rejected'];
-  var interviewedOrBeyond = statusCounts['Interviewed'] + statusCounts['Selected'];
-
+  var screened = counts['Shortlisted'] + counts['Interviewed'] + counts['Selected'] + counts['Rejected'];
+  var interviewedPlus = counts['Interviewed'] + counts['Selected'];
   return {
-    user: user,
-    candidates: candidates,
-    interviews: interviews,
+    user: user, candidates: candidates, interviews: interviews,
     kpis: {
-      total: candidates.length,
-      new: statusCounts['New'],
-      notScreened: statusCounts['Not Screened'],
-      shortlisted: statusCounts['Shortlisted'],
-      interviewed: statusCounts['Interviewed'],
-      selected: statusCounts['Selected'],
-      rejected: statusCounts['Rejected'],
-      onHold: statusCounts['On Hold']
+      total: candidates.length, new: counts['New'], notScreened: counts['Not Screened'],
+      shortlisted: counts['Shortlisted'], interviewed: counts['Interviewed'],
+      selected: counts['Selected'], rejected: counts['Rejected'], onHold: counts['On Hold']
     },
     metrics: {
-      totalCandidates: candidates.length,
-      screeningRate: Math.round((screenedOrBeyond / total) * 100),
-      interviewConversionRate: interviewedOrBeyond
-        ? Math.round((statusCounts['Selected'] / interviewedOrBeyond) * 100) : 0,
-      rejectionRate: Math.round((statusCounts['Rejected'] / total) * 100),
-      funnel: {
-        new: candidates.length,
-        screened: screenedOrBeyond,
-        interviewed: interviewedOrBeyond,
-        selected: statusCounts['Selected']
-      }
+      screeningRate: Math.round((screened / total) * 100),
+      interviewConversionRate: interviewedPlus ? Math.round((counts['Selected'] / interviewedPlus) * 100) : 0,
+      rejectionRate: Math.round((counts['Rejected'] / total) * 100),
+      funnel: { new: candidates.length, screened: screened, interviewed: interviewedPlus, selected: counts['Selected'] }
     },
-    roleStats: Object.keys(roleMap).map(function(k){ return roleMap[k]; }),
+    roleStats: Object.keys(roleMap).map(function (k) { return roleMap[k]; }),
     serverTime: nowIso_()
   };
 }
 
-function getCurrentUser() {
-  slog_('getCurrentUser', 'fetching email');
-  var email = '';
-  try { email = Session.getActiveUser().getEmail(); }
-  catch (e) { slog_('getCurrentUser', 'getActiveUser threw', { err: e.message }); }
-  if (!email) {
-    try { email = Session.getEffectiveUser().getEmail(); }
-    catch (e) { slog_('getCurrentUser', 'getEffectiveUser threw', { err: e.message }); }
-  }
-  slog_('getCurrentUser', 'email', { email: email });
-  if (!email) return { authorized: false, message: 'Unable to detect Google account. Please sign in.' };
+// ============================================================
+// RESUME UPLOAD + AUTO-EXTRACT  (A + B: regex first, Gemini fallback)
+//
+// 1. Save the uploaded file to the configured Drive folder.
+// 2. Convert it to text (temp Google Doc, OCR for images) and run a fast
+//    offline regex pass — free, instant, good for clean text resumes.
+// 3. If any of name / phone / email is still missing AND a Gemini API key is
+//    configured, send the original file straight to Gemini Flash (it reads
+//    PDFs / images natively, so it also handles scanned/image-only PDFs) and
+//    fill in the gaps. Gemini also suggests the role.
+// ============================================================
+function setGeminiKey(key) {
+  if (!key) throw new Error('Pass your Gemini API key, e.g. setGeminiKey("AIza...").');
+  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', String(key).trim());
+  return 'Gemini API key saved.';
+}
+function getGeminiKey_() {
+  return PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
+}
+function setGroqKey(key) {
+  if (!key) throw new Error('Pass your Groq API key, e.g. setGroqKey("gsk_...").');
+  PropertiesService.getScriptProperties().setProperty('GROQ_API_KEY', String(key).trim());
+  return 'Groq API key saved.';
+}
+function getGroqKey_() {
+  return PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY') || '';
+}
 
-  var role = getUserRole(email);
-  slog_('getCurrentUser', 'role', { role: role });
-  if (!role) {
-    return { authorized: false, email: email, message: 'Access Denied. Your email is not registered. Contact admin.' };
+function scanResume(payload) {
+  authorizeUser_(['Admin', 'HR']);
+  if (!payload || !payload.base64 || !payload.fileName) throw new Error('Missing upload data.');
+
+  var b64 = String(payload.base64).replace(/^data:[^;]+;base64,/, '');
+  var bytes = Utilities.base64Decode(b64);
+  if (bytes.length > CONFIG.MAX_UPLOAD_BYTES) {
+    throw new Error('File too large. Limit is ' + Math.round(CONFIG.MAX_UPLOAD_BYTES / 1024 / 1024) + ' MB.');
   }
-  var users = sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
-  var me = users.filter(function(u){ return String(u.Email).toLowerCase() === email.toLowerCase(); })[0];
+
+  var mime = payload.mimeType || 'application/octet-stream';
+  var ext = (payload.fileName.match(/\.[^.]+$/) || [''])[0];
+  var displayName = safeFileName_(payload.fileName).replace(/\.[^.]+$/, '');
+  var stamp = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss');
+
+  // Content hash to detect duplicate uploads of the SAME file. We embed a short
+  // hash in the saved file name (h-XXXX) and look for it before creating a copy.
+  var hash = hashBytes_(bytes);
+  var folder = getResumesFolder_();
+  var dup = findFileByHash_(folder, hash);
+  if (dup) {
+    return {
+      ok: true, duplicate: true,
+      url: dup.getUrl(), fileName: dup.getName(),
+      suggested: { name: '', phone: '', email: '', role: '' },
+      method: {}, usedAi: false, aiMode: '', aiConfigured: !!(getGeminiKey_() || getGroqKey_()),
+      aiError: '', extractedChars: 0, textOk: false, debugText: ''
+    };
+  }
+
+  var savedName = displayName + '_' + stamp + '_h-' + hash + ext;
+  var savedBlob = Utilities.newBlob(bytes, mime, savedName);
+  var savedFile = folder.createFile(savedBlob);
+  try { savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
+  catch (e) { try { savedFile.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {} }
+
+  // --- Pass 1: offline parsing over Google-OCR'd text (free, no quota) ---
+  var text = '';
+  try { text = extractText_(savedBlob, mime, folder.getId()); }
+  catch (e) { logAudit_(getActiveEmail_(), 'extractTextFailed', { file: savedName, err: e.message }); }
+  // Some PDFs have a broken/encoded text layer that converts to garbage. If the
+  // text doesn't look like real words, treat it as empty so text-only parsing
+  // (regex / Groq) is skipped and AI is asked to READ THE FILE instead.
+  var goodText = textLooksReal_(text) ? text : '';
+  var out = parseResume_(goodText, payload.fileName);
+  out.role = out.role || '';
+  var method = { name: out.name ? 'regex' : '', phone: out.phone ? 'regex' : '', email: out.email ? 'regex' : '' };
+
+  // --- Pass 2: AI fallback for whatever regex missed. Gemini first (it can read
+  // the file itself — handles scanned / broken-text-layer PDFs), then Groq
+  // (text-only, only useful when we have real text). Best-effort; never blocks. ---
+  var usedAi = false, aiError = '', aiMode = '';
+  function mergeAi_(ai) {
+    usedAi = true; aiMode = ai.__mode;
+    ['name', 'phone', 'email', 'role'].forEach(function (f) {
+      if ((!out[f] || out[f] === '') && ai[f]) { out[f] = ai[f]; if (f !== 'role') method[f] = 'ai'; }
+    });
+  }
+  function stillMissing_() { return !out.name || !out.phone || !out.email; }
+
+  if (stillMissing_() && getGeminiKey_()) {
+    try { mergeAi_(geminiExtract_(goodText, b64, mime)); }
+    catch (e) { aiError = 'Gemini: ' + e.message; logAudit_(getActiveEmail_(), 'geminiFailed', { file: savedName, err: e.message }); }
+  }
+  if (stillMissing_() && getGroqKey_() && goodText && goodText.length > 60) {
+    try { mergeAi_(groqExtract_(goodText)); aiError = ''; }
+    catch (e) { aiError = (aiError ? aiError + ' | ' : '') + 'Groq: ' + e.message; logAudit_(getActiveEmail_(), 'groqFailed', { file: savedName, err: e.message }); }
+  }
+
   return {
-    authorized: true,
-    email: email,
-    name: me ? me.Name : email,
-    role: role,
-    permissions: rolePermissions_(role)
+    ok: true,
+    url: savedFile.getUrl(),
+    fileName: savedName,
+    suggested: { name: out.name, phone: out.phone, email: out.email, role: out.role || '' },
+    method: method,
+    usedAi: usedAi,
+    aiMode: aiMode,
+    aiConfigured: !!(getGeminiKey_() || getGroqKey_()),
+    aiError: aiError,
+    extractedChars: text.length,
+    textOk: !!goodText,
+    debugText: (text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
   };
 }
 
-function getUserRole(email) {
-  if (!email) return null;
-  var cache = getCache_();
-  var key = CONFIG.CACHE_KEY_USER_ROLE + String(email).toLowerCase();
-  var cached = cache.get(key);
-  if (cached !== null) return cached === '__none__' ? null : cached;
-
-  var users = sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
-  var match = users.filter(function(u){ return String(u.Email).toLowerCase() === String(email).toLowerCase(); })[0];
-  var role = match ? String(match.Role) : null;
-  try { cache.put(key, role || '__none__', 600); } catch (e) {}
-  return role;
+// Heuristic: does the OCR'd text contain enough real words to parse? PDFs with
+// broken font encodings convert to mostly blank/symbol text.
+function textLooksReal_(text) {
+  if (!text) return false;
+  var words = text.match(/[A-Za-z]{2,}/g) || [];
+  var alpha = (text.match(/[A-Za-z]/g) || []).length;
+  var nonSpace = text.replace(/\s/g, '').length || 1;
+  return words.length >= 12 && (alpha / nonSpace) >= 0.45;
 }
 
-function authorizeUser(requiredRoles) {
-  var info = getCurrentUser();
-  if (!info.authorized) throw new Error(info.message || 'Access Denied');
-  if (requiredRoles && requiredRoles.length && requiredRoles.indexOf(info.role) === -1) {
-    throw new Error('Access Denied: requires role ' + requiredRoles.join(' or '));
+function extractText_(blob, mime, parentFolderId) {
+  if (mime === 'text/plain') return blob.getDataAsString();
+  // Convert PDF / DOCX / image to a temporary Google Doc, read text, then trash it.
+  var tempDoc = Drive.Files.create({
+    name: '__rrtmp_' + uuid_(),
+    mimeType: 'application/vnd.google-apps.document',
+    parents: [parentFolderId]
+  }, blob, { ocrLanguage: 'en' });
+  var docId = tempDoc.id;
+  var text = '';
+  try { text = DocumentApp.openById(docId).getBody().getText() || ''; }
+  finally { try { Drive.Files.update({ trashed: true }, docId); } catch (e) {} }
+  return text;
+}
+
+// Call Gemini for structured JSON, with automatic failover across several
+// models so a single overload (503) or daily-quota (429) doesn't kill it.
+//   TEXT mode — Drive-OCR text is sent (cheap; generous text quota).
+//   FILE mode — only when OCR returned nothing (image-only PDF). Sends bytes.
+// Model list: Script Property GEMINI_MODEL (comma-separated) overrides the
+// default chain. Each model is tried once; on a transient/quota error we move
+// to the next model after a short pause.
+function geminiExtract_(extractedText, base64, mime) {
+  var key = getGeminiKey_();
+  if (!key) throw new Error('No Gemini API key configured.');
+  var override = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || '';
+  var models = override
+    ? override.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    : ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+
+  var prompt = 'Extract fields from this job candidate resume. Return ONLY JSON ' +
+    'with keys: name, phone, email, role. name = candidate full name. ' +
+    'phone = primary phone, digits only with optional + country code. ' +
+    'email = primary email. role = job title they are applying for or current designation. ' +
+    'Use an empty string for any field not present.';
+
+  var parts, mode;
+  if (extractedText && extractedText.length > 60) {
+    parts = [{ text: prompt + '\n\nRESUME TEXT:\n' + extractedText.slice(0, 8000) }];
+    mode = 'TEXT';
+  } else {
+    var sendMime = mime;
+    if (['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'text/plain'].indexOf(mime) === -1) sendMime = 'application/pdf';
+    parts = [{ text: prompt }, { inline_data: { mime_type: sendMime, data: base64 } }];
+    mode = 'FILE';
   }
-  return info;
-}
+  var body = JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0, responseMimeType: 'application/json' } });
 
-function rolePermissions_(role) {
-  switch (role) {
-    case 'Admin':
-      return { manageUsers: true, addCandidate: true, editCandidate: true, scheduleInterview: true,
-               addFeedback: true, changeStatus: true, exportCsv: true, viewAll: true };
-    case 'HR':
-      return { manageUsers: false, addCandidate: true, editCandidate: true, scheduleInterview: true,
-               addFeedback: true, changeStatus: true, exportCsv: false, viewAll: true };
-    case 'Interviewer':
-      return { manageUsers: false, addCandidate: false, editCandidate: false, scheduleInterview: false,
-               addFeedback: true, changeStatus: false, exportCsv: false, viewAll: false };
-    case 'Viewer':
-      return { manageUsers: false, addCandidate: false, editCandidate: false, scheduleInterview: false,
-               addFeedback: false, changeStatus: false, exportCsv: false, viewAll: true };
-    default:
-      return {};
+  var lastErr = '';
+  for (var i = 0; i < models.length; i++) {
+    var model = models[i];
+    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key);
+    var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: body, muteHttpExceptions: true });
+    var code = resp.getResponseCode();
+    var raw = resp.getContentText();
+    if (code === 200) {
+      var json = JSON.parse(raw);
+      var txt = json && json.candidates && json.candidates[0] && json.candidates[0].content &&
+                json.candidates[0].content.parts && json.candidates[0].content.parts[0] &&
+                json.candidates[0].content.parts[0].text;
+      if (!txt) { lastErr = model + ': empty response'; continue; }
+      var parsed = JSON.parse(txt);
+      return {
+        name: String(parsed.name || '').trim(),
+        phone: String(parsed.phone || '').replace(/[^\d+]/g, ''),
+        email: String(parsed.email || '').trim(),
+        role: String(parsed.role || '').trim(),
+        __mode: mode + ':' + model
+      };
+    }
+    // Transient (503/500/429) or model-missing (404): record and try next model.
+    lastErr = model + ' HTTP ' + code;
+    if (code === 503 || code === 500 || code === 429) { Utilities.sleep(700); continue; }
+    if (code === 404) { continue; }
+    // Other errors (bad key, etc.) are not retryable.
+    throw new Error('Gemini HTTP ' + code + ': ' + raw.slice(0, 160));
   }
+  throw new Error('All Gemini models busy/over quota (' + lastErr + '). Google OCR still saved & parsed what it could — fill any gaps manually.');
 }
 
-function logAudit_(email, action, details) {
-  // Every successful write goes through here, so it's the natural
-  // place to invalidate the bootstrap cache.
-  invalidateBootCache_();
-  try {
-    getSheet_(CONFIG.SHEETS.AUDIT_LOG)
-      .appendRow([uuid_(), email, action, JSON.stringify(details || {}), nowIso_()]);
-  } catch (e) { /* swallow */ }
+// Groq (OpenAI-compatible) — text-only fallback using the OCR'd resume text.
+// Free tier is fast and high-limit. Model chain via Script Property GROQ_MODEL
+// (comma-separated) or the default below.
+function groqExtract_(extractedText) {
+  var key = getGroqKey_();
+  if (!key) throw new Error('No Groq API key configured.');
+  if (!extractedText || extractedText.length < 60) throw new Error('No resume text for Groq to read.');
+  var override = PropertiesService.getScriptProperties().getProperty('GROQ_MODEL') || '';
+  var models = override
+    ? override.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+    : ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
+
+  var sys = 'You extract fields from a job candidate resume and reply with ONLY a JSON object ' +
+    'with keys name, phone, email, role. name=full name; phone=primary phone digits with optional + country code; ' +
+    'email=primary email; role=job title applied for or current designation. Empty string if absent.';
+  var body = JSON.stringify({
+    model: '__MODEL__',
+    messages: [{ role: 'system', content: sys }, { role: 'user', content: extractedText.slice(0, 8000) }],
+    temperature: 0,
+    response_format: { type: 'json_object' }
+  });
+
+  var lastErr = '';
+  for (var i = 0; i < models.length; i++) {
+    var payload = body.replace('__MODEL__', models[i]);
+    var resp = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + key },
+      payload: payload, muteHttpExceptions: true
+    });
+    var code = resp.getResponseCode();
+    var raw = resp.getContentText();
+    if (code === 200) {
+      var json = JSON.parse(raw);
+      var content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
+      if (!content) { lastErr = models[i] + ': empty'; continue; }
+      var parsed = JSON.parse(content);
+      return {
+        name: String(parsed.name || '').trim(),
+        phone: String(parsed.phone || '').replace(/[^\d+]/g, ''),
+        email: String(parsed.email || '').trim(),
+        role: String(parsed.role || '').trim(),
+        __mode: 'GROQ:' + models[i]
+      };
+    }
+    lastErr = models[i] + ' HTTP ' + code;
+    if (code === 503 || code === 500 || code === 429) { Utilities.sleep(700); continue; }
+    if (code === 404) { continue; }
+    throw new Error('Groq HTTP ' + code + ': ' + raw.slice(0, 160));
+  }
+  throw new Error('All Groq models busy/over quota (' + lastErr + ').');
+}
+
+function parseResume_(text, fileNameHint) {
+  var lines = (text || '').split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+  var lower = (text || '').toLowerCase();
+
+  // ---- EMAIL: prefer a "Email:" labelled value, else first match ----
+  var email = pick_(text, /e-?mail\s*[:\-]?\s*([\w.+-]+@[\w-]+\.[\w.-]+)/i) ||
+              ((text || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/) || [''])[0];
+  email = email.replace(/[.,;]+$/, '');
+
+  // ---- PHONE: prefer a labelled value, else Indian, else any long run ----
+  var phone = pick_(text, /(?:mobile|phone|contact|mob|cell|tel|ph)\s*(?:no\.?|number)?\s*[:\-]?\s*(\+?[\d][\d\s().-]{7,}\d)/i);
+  if (!phone) { var ind = (text || '').match(/(?:\+?91[\s-]?)?[6-9]\d{9}/); if (ind) phone = ind[0]; }
+  if (!phone) { var gen = (text || '').match(/\+?\d[\d\s().-]{8,}\d/); if (gen) phone = gen[0]; }
+  phone = phone ? phone.replace(/[^\d+]/g, '') : '';
+
+  // ---- ROLE: only from an explicit label followed by a colon (avoids
+  // grabbing stray words like "Skills"/"Applied" from body text) ----
+  var role = pick_(text, /(?:position|designation|job\s*title|role\s*applied|applied\s*for|applying\s*for)\b[^:\n]{0,15}:\s*([A-Za-z][A-Za-z &/.\-]{2,40})/i);
+  role = role ? role.replace(/\s+/g, ' ').trim() : '';
+
+  // ---- NAME: labelled "Name:" > header line heuristic > filename ----
+  var name = pick_(text, /\bname\s*[:\-]\s*([A-Z][A-Za-z'.\-]+(?:\s+[A-Z][A-Za-z'.\-]+){1,4})/);
+  if (name && isNameLike_(name)) name = titleCase_(name); else name = '';
+  if (!name) {
+    var skip = /^(resume|curriculum vitae|cv|profile|objective|summary|contact|personal details|career|address|phone|email|mobile|name|nationality|date of birth)\b/i;
+    for (var i = 0; i < Math.min(18, lines.length); i++) {
+      var l = lines[i].replace(/^(name|naam)\s*[:\-]\s*/i, '').trim();
+      if (l.length < 3 || l.length > 50) continue;
+      if (skip.test(l)) continue;
+      if (/[@\d]|https?:|www\./i.test(l)) continue;
+      if (isNameLike_(l)) { name = titleCase_(l); break; }
+    }
+  }
+  if (!name && fileNameHint) name = nameFromFilename_(fileNameHint);
+
+  return { name: name, phone: phone, email: email, role: role };
+}
+
+// Helpers for parsing.
+function pick_(text, re) { var m = (text || '').match(re); return m && m[1] ? m[1].trim() : ''; }
+function isNameLike_(s) {
+  var words = s.trim().split(/\s+/);
+  if (words.length < 2 || words.length > 5) return false;
+  var compact = s.replace(/\s/g, '');
+  if ((compact.match(/[A-Za-z]/g) || []).length / compact.length < 0.85) return false;
+  return words.every(function (w) { return /^[A-Z][a-z]+(['.-][A-Za-z]+)*$|^[A-Z][A-Z'.-]+$/.test(w); });
+}
+function titleCase_(s) {
+  return s.trim().split(/\s+/).map(function (w) {
+    return w === w.toUpperCase() ? (w.charAt(0) + w.slice(1).toLowerCase()) : w;
+  }).join(' ');
+}
+// Resumes are very often named "Arjun Nair Resume.pdf" / "arjun_nair_cv.pdf".
+function nameFromFilename_(fname) {
+  var base = String(fname).replace(/\.[^.]+$/, '');
+  base = base.replace(/[_\-.]+/g, ' ')
+             .replace(/\b(resume|cv|curriculum vitae|final|updated?|copy|new|profile|biodata|naukri|indeed)\b/ig, ' ')
+             .replace(/\d+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!base) return '';
+  var words = base.split(/\s+/).filter(function (w) { return /^[A-Za-z][A-Za-z'.-]*$/.test(w); });
+  if (words.length < 2 || words.length > 4) return '';
+  // Force proper capitalisation (filenames are often all-lowercase).
+  return words.map(function (w) { return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); }).join(' ');
 }
 
 // ============================================================
 // CANDIDATES
 // ============================================================
-function getCandidates() {
-  var me = authorizeUser();
-  var all = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  if (me.role === 'Interviewer') {
-    // Only return candidates with interviews assigned to this user
-    var interviews = sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS));
-    var assignedIds = {};
-    interviews.forEach(function(i){
-      if (String(i.Interviewer).toLowerCase() === me.email.toLowerCase()) assignedIds[i.CandidateID] = true;
-    });
-    all = all.filter(function(c){ return assignedIds[c.CandidateID]; });
-  }
-  return all;
-}
-
-function getCandidate(candidateId) {
-  authorizeUser();
-  var all = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  return all.filter(function(c){ return c.CandidateID === candidateId; })[0] || null;
-}
-
 function addCandidate(data) {
-  var me = authorizeUser(['Admin','HR']);
+  var me = authorizeUser_(['Admin', 'HR']);
+  if (!data || !data.Name || (!data.Phone && !data.Email)) throw new Error('Name and (Phone or Email) are required.');
 
-  if (!data || !data.Name || (!data.Phone && !data.Email)) {
-    throw new Error('Name and Phone or Email are required.');
-  }
+  // Validate formats.
+  if (data.Email && !validEmail_(data.Email)) throw new Error('Please enter a valid email address.');
+  if (data.Phone && !validPhone_(data.Phone)) throw new Error('Please enter a valid phone number (7–15 digits).');
 
   var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
   var existing = sheetToObjects_(sheet);
-
-  // Duplicate detection by email or phone
   for (var i = 0; i < existing.length; i++) {
     if (data.Email && existing[i].Email && String(existing[i].Email).toLowerCase() === String(data.Email).toLowerCase()) {
-      throw new Error('Duplicate candidate: email already exists.');
+      throw new Error('A candidate with that email already exists.');
     }
-    if (data.Phone && existing[i].Phone && String(existing[i].Phone) === String(data.Phone)) {
-      throw new Error('Duplicate candidate: phone already exists.');
+    if (data.Phone && existing[i].Phone &&
+        String(existing[i].Phone).replace(/[^\d]/g, '') === String(data.Phone).replace(/[^\d]/g, '')) {
+      throw new Error('A candidate with that phone already exists.');
+    }
+    // Same resume file already attached to another candidate.
+    if (data.ResumeLink && existing[i].ResumeLink && String(existing[i].ResumeLink) === String(data.ResumeLink)) {
+      throw new Error('That resume is already attached to another candidate.');
     }
   }
-
   var id = uuid_();
-  var status = data.Status && CONFIG.STATUSES.indexOf(data.Status) !== -1 ? data.Status : 'New';
-
-  // If a resume payload was attached, save it to Drive and use the URL.
-  var resumeLink = data.ResumeLink || '';
-  if (data.ResumeUpload && data.ResumeUpload.base64 && data.ResumeUpload.fileName) {
-    var saved = saveResumeToDrive_(id, data.Name, data.ResumeUpload);
-    resumeLink = saved.url;
-  }
-
+  var status = (data.Status && CONFIG.STATUSES.indexOf(data.Status) !== -1) ? data.Status : 'New';
   sheet.appendRow([
     id, data.Name, data.Phone || '', data.Email || '',
-    data.RoleApplied || '', resumeLink, data.Source || '',
-    status, nowIso_()
+    data.RoleApplied || '', data.ResumeLink || '', data.Source || '', status, nowIso_()
   ]);
-  logAudit_(me.email, 'addCandidate', { id: id, name: data.Name, resume: !!resumeLink });
-  return { ok: true, CandidateID: id, ResumeLink: resumeLink };
+  logAudit_(me.email, 'addCandidate', { id: id, name: data.Name, resume: !!data.ResumeLink });
+  return { ok: true, CandidateID: id, ResumeLink: data.ResumeLink || '' };
 }
-
-// ============================================================
-// RESUME UPLOAD → DRIVE
-// ============================================================
-function getOrCreateResumesFolder_() {
-  // 1. Explicit folder ID wins (recommended for shared drives / shared folders).
-  if (CONFIG.RESUMES_FOLDER_ID) {
-    try {
-      return DriveApp.getFolderById(CONFIG.RESUMES_FOLDER_ID);
-    } catch (e) {
-      throw new Error('Configured RESUMES_FOLDER_ID is invalid or inaccessible: ' +
-                      CONFIG.RESUMES_FOLDER_ID);
-    }
-  }
-  // 2. Otherwise reuse a folder of the configured name from My Drive.
-  var folders = DriveApp.getFoldersByName(CONFIG.RESUMES_FOLDER_NAME);
-  if (folders.hasNext()) return folders.next();
-  // 3. Last resort — create it.
-  return DriveApp.createFolder(CONFIG.RESUMES_FOLDER_NAME);
-}
-
-function safeFileName_(name) {
-  return String(name || 'resume').replace(/[\\/:*?"<>|]+/g, '_').slice(0, 80);
-}
-
-function saveResumeToDrive_(candidateId, candidateName, upload) {
-  if (!upload || !upload.base64 || !upload.fileName) {
-    throw new Error('Missing resume upload payload.');
-  }
-  // Strip any data: URL prefix the frontend may have included.
-  var b64 = String(upload.base64).replace(/^data:[^;]+;base64,/, '');
-  var bytes;
-  try { bytes = Utilities.base64Decode(b64); }
-  catch (e) { throw new Error('Invalid file data.'); }
-
-  if (bytes.length > CONFIG.MAX_UPLOAD_BYTES) {
-    throw new Error('File too large. Limit is ' +
-      Math.round(CONFIG.MAX_UPLOAD_BYTES / 1024 / 1024) + ' MB.');
-  }
-
-  var mime = upload.mimeType || 'application/octet-stream';
-  var ext = (upload.fileName.match(/\.[^.]+$/) || [''])[0];
-  var clean = safeFileName_(candidateName) + '_' +
-              String(candidateId).slice(0, 8) + '_' +
-              Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyyMMdd-HHmmss') +
-              ext;
-
-  var blob = Utilities.newBlob(bytes, mime, clean);
-  var folder = getOrCreateResumesFolder_();
-  var file = folder.createFile(blob);
-
-  // Make the file accessible to anyone in the org / with the link.
-  try {
-    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-  } catch (e) {
-    // Workspace policy may block ANYONE_WITH_LINK; fall back to domain.
-    try {
-      file.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW);
-    } catch (e2) { /* keep default sharing */ }
-  }
-
-  return { url: file.getUrl(), id: file.getId(), name: clean };
-}
-
-function uploadResumeForCandidate(candidateId, upload) {
-  var me = authorizeUser(['Admin','HR']);
-  if (!candidateId) throw new Error('CandidateID required.');
-
-  var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
-  var row = findRowByKey_(sheet, 0, candidateId);
-  if (row === -1) throw new Error('Candidate not found.');
-
-  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  var nameCol = headers.indexOf('Name') + 1;
-  var linkCol = headers.indexOf('ResumeLink') + 1;
-  var candidateName = sheet.getRange(row, nameCol).getValue();
-
-  var saved = saveResumeToDrive_(candidateId, candidateName, upload);
-  sheet.getRange(row, linkCol).setValue(saved.url);
-
-  logAudit_(me.email, 'uploadResume', { id: candidateId, file: saved.name });
-  return { ok: true, ResumeLink: saved.url };
-}
-
-function updateCandidate(data) {
-  var me = authorizeUser(['Admin','HR']);
-  if (!data || !data.CandidateID) throw new Error('CandidateID required.');
-  var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
-  var headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
-  var row = findRowByKey_(sheet, 0, data.CandidateID);
-  if (row === -1) throw new Error('Candidate not found.');
-
-  ['Name','Phone','Email','RoleApplied','ResumeLink','Source'].forEach(function(field){
-    if (data[field] !== undefined) {
-      var col = headers.indexOf(field);
-      if (col !== -1) sheet.getRange(row, col + 1).setValue(data[field]);
-    }
-  });
-  logAudit_(me.email, 'updateCandidate', { id: data.CandidateID });
-  return { ok: true };
-}
-
 function updateStatus(candidateId, newStatus) {
-  var me = authorizeUser(['Admin','HR']);
+  var me = authorizeUser_(['Admin', 'HR']);
   if (CONFIG.STATUSES.indexOf(newStatus) === -1) throw new Error('Invalid status.');
-
   var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
   var row = findRowByKey_(sheet, 0, candidateId);
   if (row === -1) throw new Error('Candidate not found.');
-  var headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
-  var statusCol = headers.indexOf('Status') + 1;
-  var oldStatus = sheet.getRange(row, statusCol).getValue();
-  sheet.getRange(row, statusCol).setValue(newStatus);
-
-  getSheet_(CONFIG.SHEETS.STATUS_HISTORY)
-    .appendRow([uuid_(), candidateId, oldStatus, newStatus, me.email, nowIso_()]);
-  logAudit_(me.email, 'updateStatus', { id: candidateId, from: oldStatus, to: newStatus });
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  sheet.getRange(row, headers.indexOf('Status') + 1).setValue(newStatus);
+  logAudit_(me.email, 'updateStatus', { id: candidateId, to: newStatus });
   return { ok: true };
-}
-
-function getNotScreenedCandidates() {
-  authorizeUser();
-  return sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES))
-    .filter(function(c){ return c.Status === 'Not Screened'; });
 }
 
 // ============================================================
 // INTERVIEWS
 // ============================================================
 function addInterview(data) {
-  var me = authorizeUser(['Admin','HR']);
-  if (!data || !data.CandidateID || !data.Round || !data.DateTime) {
-    throw new Error('CandidateID, Round, and DateTime are required.');
-  }
+  var me = authorizeUser_(['Admin', 'HR']);
+  if (!data || !data.CandidateID || !data.Round || !data.DateTime) throw new Error('Candidate, Round, and Date/Time are required.');
   var id = uuid_();
   getSheet_(CONFIG.SHEETS.INTERVIEWS).appendRow([
     id, data.CandidateID, data.Round, data.Interviewer || '',
@@ -863,188 +664,66 @@ function addInterview(data) {
   logAudit_(me.email, 'addInterview', { id: id, candidate: data.CandidateID });
   return { ok: true, InterviewID: id };
 }
-
-function getInterviews() {
-  var me = authorizeUser();
-  var all = sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS));
-  if (me.role === 'Interviewer') {
-    all = all.filter(function(i){
-      return String(i.Interviewer).toLowerCase() === me.email.toLowerCase();
-    });
-  }
-  return all;
-}
-
-function getInterviewsByCandidate(candidateId) {
-  authorizeUser();
-  return sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS))
-    .filter(function(i){ return i.CandidateID === candidateId; });
-}
-
 function updateInterviewFeedback(data) {
-  var me = authorizeUser(['Admin','HR','Interviewer']);
+  var me = authorizeUser_(['Admin', 'HR', 'Interviewer']);
   if (!data || !data.InterviewID) throw new Error('InterviewID required.');
   var sheet = getSheet_(CONFIG.SHEETS.INTERVIEWS);
   var row = findRowByKey_(sheet, 0, data.InterviewID);
   if (row === -1) throw new Error('Interview not found.');
-  var headers = sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
-
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   if (me.role === 'Interviewer') {
-    var interviewerCol = headers.indexOf('Interviewer');
-    var existing = sheet.getRange(row, interviewerCol + 1).getValue();
-    if (String(existing).toLowerCase() !== me.email.toLowerCase()) {
-      throw new Error('Interviewers can only update their own interviews.');
-    }
+    var owner = sheet.getRange(row, headers.indexOf('Interviewer') + 1).getValue();
+    if (String(owner).toLowerCase() !== me.email.toLowerCase()) throw new Error('You can only update your own interviews.');
   }
-
-  ['Feedback','Score','Status'].forEach(function(field){
-    if (data[field] !== undefined) {
-      var col = headers.indexOf(field);
-      if (col !== -1) sheet.getRange(row, col + 1).setValue(data[field]);
+  ['Feedback', 'Score', 'Status'].forEach(function (f) {
+    if (data[f] !== undefined) {
+      var col = headers.indexOf(f);
+      if (col !== -1) sheet.getRange(row, col + 1).setValue(data[f]);
     }
   });
-  logAudit_(me.email, 'updateInterviewFeedback', { id: data.InterviewID });
+  logAudit_(me.email, 'updateFeedback', { id: data.InterviewID });
   return { ok: true };
 }
 
 // ============================================================
-// USERS (Admin only)
+// USERS (Admin)
 // ============================================================
-function getUsers() {
-  authorizeUser(['Admin']);
-  return sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
-}
-
-function validateUser(email) {
-  return !!getUserRole(email);
-}
-
+function getUsers() { authorizeUser_(['Admin']); return sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS)); }
 function addUser(data) {
-  var me = authorizeUser(['Admin']);
+  var me = authorizeUser_(['Admin']);
   if (!data || !data.Email || !data.Role) throw new Error('Email and Role required.');
   if (CONFIG.ROLES.indexOf(data.Role) === -1) throw new Error('Invalid role.');
-  if (getUserRole(data.Email)) throw new Error('User already exists.');
-  getSheet_(CONFIG.SHEETS.USERS)
-    .appendRow([uuid_(), data.Name || '', data.Email, data.Role]);
-  try { getCache_().remove(CONFIG.CACHE_KEY_USER_ROLE + String(data.Email).toLowerCase()); } catch (e) {}
+  var users = sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS));
+  for (var i = 0; i < users.length; i++) {
+    if (String(users[i].Email).toLowerCase() === String(data.Email).toLowerCase()) throw new Error('User already exists.');
+  }
+  getSheet_(CONFIG.SHEETS.USERS).appendRow([uuid_(), data.Name || '', data.Email, data.Role]);
   logAudit_(me.email, 'addUser', { email: data.Email, role: data.Role });
   return { ok: true };
 }
-
 function deleteUser(userId) {
-  var me = authorizeUser(['Admin']);
+  var me = authorizeUser_(['Admin']);
   var sheet = getSheet_(CONFIG.SHEETS.USERS);
   var row = findRowByKey_(sheet, 0, userId);
   if (row === -1) throw new Error('User not found.');
   var email = sheet.getRange(row, 3).getValue();
-  if (String(email).toLowerCase() === me.email.toLowerCase()) {
-    throw new Error('You cannot delete your own account.');
-  }
+  if (String(email).toLowerCase() === me.email.toLowerCase()) throw new Error('You cannot delete your own account.');
   sheet.deleteRow(row);
-  try { getCache_().remove(CONFIG.CACHE_KEY_USER_ROLE + String(email).toLowerCase()); } catch (e) {}
-  logAudit_(me.email, 'deleteUser', { userId: userId, email: email });
+  logAudit_(me.email, 'deleteUser', { userId: userId });
   return { ok: true };
-}
-
-// ============================================================
-// ANALYTICS
-// ============================================================
-function getDashboardKpis() {
-  authorizeUser();
-  var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  var by = {};
-  CONFIG.STATUSES.forEach(function(s){ by[s] = 0; });
-  candidates.forEach(function(c){ if (by[c.Status] !== undefined) by[c.Status]++; });
-  return {
-    total: candidates.length,
-    new: by['New'],
-    notScreened: by['Not Screened'],
-    shortlisted: by['Shortlisted'],
-    interviewed: by['Interviewed'],
-    selected: by['Selected'],
-    rejected: by['Rejected'],
-    onHold: by['On Hold']
-  };
-}
-
-function getConversionMetrics() {
-  authorizeUser();
-  var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  var total = candidates.length || 1;
-  var counts = { new: 0, notScreened: 0, screened: 0, interviewed: 0, selected: 0, rejected: 0 };
-  candidates.forEach(function(c){
-    switch (c.Status) {
-      case 'New': counts.new++; break;
-      case 'Not Screened': counts.notScreened++; break;
-      case 'Shortlisted': counts.screened++; break;
-      case 'Interviewed': counts.interviewed++; break;
-      case 'Selected': counts.selected++; break;
-      case 'Rejected': counts.rejected++; break;
-    }
-  });
-  var screenedOrBeyond = counts.screened + counts.interviewed + counts.selected + counts.rejected;
-  var interviewedOrBeyond = counts.interviewed + counts.selected;
-  return {
-    totalCandidates: candidates.length,
-    screeningRate: Math.round((screenedOrBeyond / total) * 100),
-    interviewConversionRate: interviewedOrBeyond ? Math.round((counts.selected / interviewedOrBeyond) * 100) : 0,
-    rejectionRate: Math.round((counts.rejected / total) * 100),
-    funnel: {
-      new: candidates.length,
-      screened: screenedOrBeyond,
-      interviewed: interviewedOrBeyond,
-      selected: counts.selected
-    }
-  };
-}
-
-function getRoleWiseStats() {
-  authorizeUser();
-  var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
-  var byRole = {};
-  candidates.forEach(function(c){
-    var r = c.RoleApplied || 'Unspecified';
-    if (!byRole[r]) byRole[r] = { role: r, total: 0, selected: 0, rejected: 0 };
-    byRole[r].total++;
-    if (c.Status === 'Selected') byRole[r].selected++;
-    if (c.Status === 'Rejected') byRole[r].rejected++;
-  });
-  return Object.keys(byRole).map(function(k){ return byRole[k]; });
 }
 
 // ============================================================
 // EXPORT
 // ============================================================
 function exportCandidatesCsv() {
-  authorizeUser(['Admin']);
+  authorizeUser_(['Admin']);
   var rows = getSheet_(CONFIG.SHEETS.CANDIDATES).getDataRange().getValues();
-  var csv = rows.map(function(r){
-    return r.map(function(v){
+  return rows.map(function (r) {
+    return r.map(function (v) {
       var s = (v === null || v === undefined) ? '' : String(v);
-      if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) {
-        s = '"' + s.replace(/"/g, '""') + '"';
-      }
+      if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1) s = '"' + s.replace(/"/g, '""') + '"';
       return s;
     }).join(',');
   }).join('\n');
-  return csv;
-}
-
-// ============================================================
-// MANIFEST AND SERVICE WORKER (served via doGet)
-// Both live in HTML files because Apps Script only allows .gs and .html.
-// ============================================================
-function getManifestJson() {
-  var raw = HtmlService.createHtmlOutputFromFile('Manifest').getContent();
-  // Strip the leading <!-- ... --> comment block.
-  raw = raw.replace(/<!--[\s\S]*?-->/, '').trim();
-  var url = ScriptApp.getService().getUrl();
-  return raw.replace(/__START_URL__/g, url);
-}
-
-function getServiceWorkerJs() {
-  var raw = HtmlService.createHtmlOutputFromFile('ServiceWorker').getContent();
-  // Extract the JS between the //<SW> ... //</SW> markers.
-  var m = raw.match(/\/\/<SW>([\s\S]*?)\/\/<\/SW>/);
-  return m ? m[1].trim() : '';
 }
