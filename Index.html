@@ -520,7 +520,7 @@ function openCandidate(id){
             '<input id="waNum" value="'+esc(waDigits(c.Phone))+'" inputmode="tel"></div>'+
           '<div class="field" style="align-self:end"><div class="muted tiny">Digits incl. country code, no +</div></div></div>'+
         '<div class="field"><label>WhatsApp message (editable)</label>'+
-          '<textarea id="waMsg" rows="2">'+esc(defaultWaMsg(c))+'</textarea></div>'+
+          '<textarea id="waMsg" rows="10">'+esc(defaultWaMsg(c))+'</textarea></div>'+
         '<button class="btn btn-block" style="background:#25D366;border-color:#25D366;color:#fff" '+
           'onclick="openWhatsApp(\''+id+'\')">💬 Message on WhatsApp</button>':'')+'</div>';
   if(p.editCandidate) html+='<button class="btn btn-ghost btn-block" onclick="openEditCandidate(\''+id+'\')">✏️ Edit Details</button>';
@@ -564,7 +564,25 @@ function waDigits(phone){
   return d;
 }
 // Default WhatsApp greeting shown (editable) in the candidate profile.
-function defaultWaMsg(c){ return 'Hi '+(c.Name||'')+', regarding the '+(c.RoleApplied||'')+' opportunity at SM.'; }
+function defaultWaMsg(c){
+  return 'Hello '+(c.Name||'')+',\n\n'+
+    'Thank you for your interest in joining SandalMist Resort, Kasaragod.\n\n'+
+    'To proceed with your application, please share the following details:\n\n'+
+    '* Full Name:\n'+
+    '* Current Location:\n'+
+    '* Current Salary:\n'+
+    '* Expected Salary:\n'+
+    '* Current Role:\n'+
+    '* Current Company:\n'+
+    '* Total Years of Experience in Front Office:\n'+
+    '* Reason for Leaving Your Current Job:\n'+
+    '* Reason for Applying to Sandal Mist Resort:\n'+
+    '* Approximate Joining Date:\n\n'+
+    'Also, please let me know your availability for a brief call so we can discuss your application further.\n\n'+
+    'Thank you, and I look forward to hearing from you.\n\n'+
+    'Regards\n'+
+    'Prashanth';
+}
 function openWhatsApp(id){
   var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
   if(!c) return;
