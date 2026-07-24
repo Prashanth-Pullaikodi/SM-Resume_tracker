@@ -329,13 +329,30 @@ function scanResume(payload) {
   // hash in the saved file name (h-XXXX) and look for it before creating a copy.
   var hash = hashBytes_(bytes);
   var folder = getResumesFolder_();
+
+  // --- Offline parsing over Google-OCR'd text (free, no quota). Runs on the
+  // uploaded bytes so we can auto-fill fields even when the file is a duplicate
+  // of one already in Drive (in that case we just reuse the existing file). ---
+  var parseBlob = Utilities.newBlob(bytes, mime, displayName + ext);
+  var text = '';
+  try { text = extractText_(parseBlob, mime, folder.getId()); }
+  catch (e) { logAudit_(getActiveEmail_(), 'extractTextFailed', { file: payload.fileName, err: e.message }); }
+  // Some PDFs have a broken/encoded text layer that converts to garbage. If the
+  // text doesn't look like real words, treat it as empty so we don't parse junk.
+  var goodText = textLooksReal_(text) ? text : '';
+  var out = parseResume_(goodText, payload.fileName);
+  out.role = out.role || '';
+  var method = { name: out.name ? 'regex' : '', phone: out.phone ? 'regex' : '', email: out.email ? 'regex' : '' };
+  var suggested = { name: out.name, phone: out.phone, email: out.email, role: out.role || '' };
+
   var dup = findFileByHash_(folder, hash);
   if (dup) {
     return {
       ok: true, duplicate: true,
       url: dup.getUrl(), fileName: dup.getName(),
-      suggested: { name: '', phone: '', email: '', role: '' },
-      method: {}, extractedChars: 0, textOk: false, debugText: ''
+      suggested: suggested, method: method,
+      extractedChars: text.length, textOk: !!goodText,
+      debugText: (text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
     };
   }
 
@@ -345,22 +362,11 @@ function scanResume(payload) {
   try { savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
   catch (e) { try { savedFile.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {} }
 
-  // --- Offline parsing over Google-OCR'd text (free, no quota) ---
-  var text = '';
-  try { text = extractText_(savedBlob, mime, folder.getId()); }
-  catch (e) { logAudit_(getActiveEmail_(), 'extractTextFailed', { file: savedName, err: e.message }); }
-  // Some PDFs have a broken/encoded text layer that converts to garbage. If the
-  // text doesn't look like real words, treat it as empty so we don't parse junk.
-  var goodText = textLooksReal_(text) ? text : '';
-  var out = parseResume_(goodText, payload.fileName);
-  out.role = out.role || '';
-  var method = { name: out.name ? 'regex' : '', phone: out.phone ? 'regex' : '', email: out.email ? 'regex' : '' };
-
   return {
     ok: true,
     url: savedFile.getUrl(),
     fileName: savedName,
-    suggested: { name: out.name, phone: out.phone, email: out.email, role: out.role || '' },
+    suggested: suggested,
     method: method,
     extractedChars: text.length,
     textOk: !!goodText,

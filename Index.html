@@ -448,10 +448,6 @@ function onResumePicked(input){
     api('scanResume',{ fileName:file.name, mimeType:file.type||'application/octet-stream', base64:b64 })
       .then(function(res){
         if(res.url) document.getElementById('resumeLink').value=res.url;
-        if(res.duplicate){
-          setScan('fail','This exact resume was already uploaded earlier — using the existing file (no duplicate created).',res);
-          return;
-        }
         var s=res.suggested||{}, filled=[];
         if(s.name){ document.getElementById('f_name').value=s.name; filled.push('name'); }
         if(s.phone){ document.getElementById('f_phone').value=s.phone; filled.push('phone'); }
@@ -459,8 +455,9 @@ function onResumePicked(input){
         if(s.role){ var rl=document.getElementById('f_role'); if(rl&&!rl.value){ rl.value=s.role; filled.push('role'); } }
         var extra='';
         if(!res.textOk){ extra=' Note: this PDF’s text layer is unreadable — please fill the details in.'; }
-        if(filled.length){ setScan('done','Saved to Drive · auto-filled '+filled.join(', ')+'. Please verify.',res); }
-        else { setScan('fail','Saved to Drive. Couldn’t auto-detect details — please fill them in.'+extra,res); }
+        var where=res.duplicate?'Already in Drive — reusing the existing file':'Saved to Drive';
+        if(filled.length){ setScan('done',where+' · auto-filled '+filled.join(', ')+'. Please verify.',res); }
+        else { setScan('fail',where+'. Couldn’t auto-detect details — please fill them in.'+extra,res); }
       })
       .catch(function(err){ setScan('fail','Upload failed: '+(err.message||'error')); });
   };
