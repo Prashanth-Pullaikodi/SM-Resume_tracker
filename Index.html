@@ -564,7 +564,14 @@ function openWhatsApp(id){
   var d=waDigits(c.Phone);
   if(!d){ toast('No valid phone number.','err'); return; }
   var text='Hi '+(c.Name||'')+', regarding the '+(c.RoleApplied||'')+' opportunity at SM.';
-  window.open('https://wa.me/'+d+'?text='+encodeURIComponent(text),'_blank');
+  // Open the chat directly with the message prefilled in WhatsApp's compose box
+  // (fully editable there before sending). On desktop go straight to WhatsApp
+  // Web; on mobile use wa.me, which hands off to the installed app.
+  var isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  var url=isMobile
+    ? 'https://wa.me/'+d+'?text='+encodeURIComponent(text)
+    : 'https://web.whatsapp.com/send?phone='+d+'&text='+encodeURIComponent(text);
+  window.open(url,'_blank');
 }
 function submitMessage(e,id){
   e.preventDefault();
