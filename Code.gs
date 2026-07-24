@@ -510,6 +510,41 @@ function updateStatus(candidateId, newStatus) {
   logAudit_(me.email, 'updateStatus', { id: candidateId, to: newStatus });
   return { ok: true };
 }
+// Edit a candidate's core details (name, phone, email, role, source). Lets a
+// wrong/extra digit in the phone be corrected and persisted.
+function updateCandidate(candidateId, data) {
+  var me = authorizeUser_(['Admin', 'HR']);
+  if (!data || !data.Name || (!data.Phone && !data.Email)) throw new Error('Name and (Phone or Email) are required.');
+  if (data.Email && !validEmail_(data.Email)) throw new Error('Please enter a valid email address.');
+  if (data.Phone && !validPhone_(data.Phone)) throw new Error('Please enter a valid phone number (7–15 digits).');
+
+  var sheet = getSheet_(CONFIG.SHEETS.CANDIDATES);
+  var row = findRowByKey_(sheet, 0, candidateId);
+  if (row === -1) throw new Error('Candidate not found.');
+
+  // Uniqueness against OTHER candidates only.
+  var existing = sheetToObjects_(sheet);
+  for (var i = 0; i < existing.length; i++) {
+    if (String(existing[i].CandidateID) === String(candidateId)) continue;
+    if (data.Email && existing[i].Email && String(existing[i].Email).toLowerCase() === String(data.Email).toLowerCase()) {
+      throw new Error('Another candidate with that email already exists.');
+    }
+    if (data.Phone && existing[i].Phone &&
+        String(existing[i].Phone).replace(/[^\d]/g, '') === String(data.Phone).replace(/[^\d]/g, '')) {
+      throw new Error('Another candidate with that phone already exists.');
+    }
+  }
+
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  // Store phone as text so a leading + / country code isn't mangled into a number.
+  var updates = { Name: data.Name, Phone: data.Phone ? "'" + String(data.Phone) : '', Email: data.Email || '', RoleApplied: data.RoleApplied || '', Source: data.Source || '' };
+  Object.keys(updates).forEach(function (f) {
+    var col = headers.indexOf(f);
+    if (col !== -1) sheet.getRange(row, col + 1).setValue(updates[f]);
+  });
+  logAudit_(me.email, 'updateCandidate', { id: candidateId });
+  return { ok: true, Phone: data.Phone || '' };
+}
 
 // ============================================================
 // INTERVIEWS

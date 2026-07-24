@@ -514,7 +514,7 @@ function openCandidate(id){
     '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:#fbfcfe">'+
       '<div class="small">📞 '+esc(c.Phone||'—')+'</div><div class="small" style="margin-top:5px">✉️ '+esc(c.Email||'—')+'</div>'+
       '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div>'+
-      ((c.Phone||'').trim()?
+      (String(c.Phone||'').trim()?
         '<div class="row2" style="margin-top:10px">'+
           '<div class="field"><label>WhatsApp number</label>'+
             '<input id="waNum" value="'+esc(waDigits(c.Phone))+'" inputmode="tel"></div>'+
@@ -523,6 +523,7 @@ function openCandidate(id){
           '<textarea id="waMsg" rows="2">'+esc(defaultWaMsg(c))+'</textarea></div>'+
         '<button class="btn btn-block" style="background:#25D366;border-color:#25D366;color:#fff" '+
           'onclick="openWhatsApp(\''+id+'\')">💬 Message on WhatsApp</button>':'')+'</div>';
+  if(p.editCandidate) html+='<button class="btn btn-ghost btn-block" onclick="openEditCandidate(\''+id+'\')">✏️ Edit Details</button>';
   if(p.changeStatus) html+='<div class="field"><label>Update Status</label><div style="display:flex;gap:8px">'+
     '<select id="newStatus">'+opts+'</select><button class="btn btn-sm" onclick="changeStatus(\''+id+'\')">Save</button></div></div>';
   if(p.scheduleInterview) html+='<button class="btn btn-ghost btn-block" onclick="openInterview(\''+id+'\')">＋ Schedule Interview</button>';
@@ -594,6 +595,36 @@ function submitMessage(e,id){
     state.messages.push({MessageID:res.MessageID,CandidateID:id,Direction:res.Direction,Body:body,By:res.By,Timestamp:res.Timestamp});
     toast('Logged.'); openCandidate(id);
   }).catch(function(err){ btn.disabled=false; btn.textContent='Save to log'; toast(err.message||'Failed.','err'); });
+}
+function openEditCandidate(id){
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
+  if(!c) return;
+  openModal('Edit Candidate',
+    '<form id="editForm" onsubmit="submitEditCandidate(event,\''+id+'\')" class="stack">'+
+      '<div class="field"><label>Name</label><input name="Name" id="e_name" value="'+esc(c.Name||'')+'"></div>'+
+      '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="e_phone" value="'+esc(String(c.Phone||''))+'"></div>'+
+      '<div class="field"><label>Email</label><input name="Email" id="e_email" value="'+esc(c.Email||'')+'"></div></div>'+
+      '<div class="row2"><div class="field"><label>Role Applied</label><input name="RoleApplied" value="'+esc(c.RoleApplied||'')+'"></div>'+
+      '<div class="field"><label>Source</label><input name="Source" value="'+esc(c.Source||'')+'"></div></div>'+
+      '<button class="btn btn-block" type="submit">Save Changes</button>'+
+    '</form>');
+}
+function submitEditCandidate(e,id){
+  e.preventDefault();
+  var d=formData(e.target), ok=true;
+  if(!d.Name||!d.Name.trim()){ fieldErr('e_name',true,'Name is required.'); ok=false; } else fieldErr('e_name',false);
+  if(d.Email&&!validEmail(d.Email)){ fieldErr('e_email',true,'Enter a valid email.'); ok=false; } else fieldErr('e_email',false);
+  if(d.Phone&&!validPhone(d.Phone)){ fieldErr('e_phone',true,'Enter a valid phone (7–15 digits).'); ok=false; } else fieldErr('e_phone',false);
+  if(!d.Phone&&!d.Email){ fieldErr('e_email',true,'Provide a phone or an email.'); ok=false; }
+  if(!ok) return;
+  var btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+  api('updateCandidate',id,d).then(function(){
+    for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id){
+      state.candidates[i].Name=d.Name; state.candidates[i].Phone=d.Phone||''; state.candidates[i].Email=d.Email||'';
+      state.candidates[i].RoleApplied=d.RoleApplied||''; state.candidates[i].Source=d.Source||'';
+    }
+    toast('Candidate updated.'); openCandidate(id); render(); refresh();
+  }).catch(function(err){ btn.disabled=false; btn.textContent='Save Changes'; toast(err.message||'Failed.','err'); });
 }
 function changeStatus(id){
   var v=document.getElementById('newStatus').value;
