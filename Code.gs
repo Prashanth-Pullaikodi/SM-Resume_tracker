@@ -298,8 +298,47 @@ function bootstrapApp() {
       funnel: { new: candidates.length, screened: screened, interviewed: interviewedPlus, selected: counts['Selected'] }
     },
     roleStats: Object.keys(roleMap).map(function (k) { return roleMap[k]; }),
+    waTemplate: getWaTemplate_(),
     serverTime: nowIso_()
   };
+}
+
+// ============================================================
+// WHATSAPP MESSAGE TEMPLATE (editable, stored in Script Properties)
+//
+// Placeholders filled in on the client: {name} = candidate name,
+// {role} = role applied, {me} = the logged-in user's name (signature).
+// ============================================================
+var DEFAULT_WA_TEMPLATE =
+  'Hello {name},\n\n' +
+  'Thank you for your interest in joining SandalMist Resort, Kasaragod.\n\n' +
+  'To proceed with your application, please share the following details:\n\n' +
+  '* Full Name:\n' +
+  '* Current Location:\n' +
+  '* Current Salary:\n' +
+  '* Expected Salary:\n' +
+  '* Current Role:\n' +
+  '* Current Company:\n' +
+  '* Total Years of Experience in Front Office:\n' +
+  '* Reason for Leaving Your Current Job:\n' +
+  '* Reason for Applying to Sandal Mist Resort:\n' +
+  '* Approximate Joining Date:\n\n' +
+  'Also, please let me know your availability for a brief call so we can discuss your application further.\n\n' +
+  'Thank you, and I look forward to hearing from you.\n\n' +
+  'Regards\n{me}';
+
+function getWaTemplate_() {
+  return PropertiesService.getScriptProperties().getProperty('WA_TEMPLATE') || DEFAULT_WA_TEMPLATE;
+}
+function getWaTemplate() { return getWaTemplate_(); }
+function setWaTemplate(text) {
+  var me = authorizeUser_(['Admin', 'HR']);
+  var t = String(text == null ? '' : text);
+  if (!t.trim()) throw new Error('Template cannot be empty.');
+  if (t.length > 4000) throw new Error('Template is too long (max 4000 characters).');
+  PropertiesService.getScriptProperties().setProperty('WA_TEMPLATE', t);
+  logAudit_(me.email, 'setWaTemplate', { length: t.length });
+  return { ok: true, waTemplate: t };
 }
 
 // ============================================================
