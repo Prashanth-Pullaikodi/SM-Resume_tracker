@@ -251,6 +251,50 @@ var CHIPS=[{k:'PENDING',l:'Pending'},{k:'',l:'All'},{k:'New',l:'New'},{k:'Not Sc
   {k:'Shortlisted',l:'Shortlisted'},{k:'Interviewed',l:'Interviewed'},
   {k:'Selected',l:'Selected'},{k:'Rejected',l:'Rejected'},{k:'On Hold',l:'On Hold'}];
 
+// ---- Dropdown option lists (shared by Add/Edit forms) ----
+var ROLE_OPTIONS=['Front Office','Chef','Housekeeping','Manager','Sales and Marketing'];
+var SOURCE_OPTIONS=['Advertisement','Walk-in','Direct','Reference'];
+// Country dial codes for the WhatsApp number (searchable). India first / default.
+var COUNTRIES=[
+  ['India','91'],['United States','1'],['United Kingdom','44'],['United Arab Emirates','971'],
+  ['Saudi Arabia','966'],['Qatar','974'],['Kuwait','965'],['Oman','968'],['Bahrain','973'],
+  ['Singapore','65'],['Malaysia','60'],['Australia','61'],['Canada','1'],['Germany','49'],
+  ['France','33'],['Italy','39'],['Spain','34'],['Netherlands','31'],['Switzerland','41'],
+  ['Ireland','353'],['Nepal','977'],['Sri Lanka','94'],['Bangladesh','880'],['Pakistan','92'],
+  ['Maldives','960'],['Thailand','66'],['Indonesia','62'],['Philippines','63'],['China','86'],
+  ['Japan','81'],['South Korea','82'],['Hong Kong','852'],['New Zealand','64'],['South Africa','27'],
+  ['Kenya','254'],['Nigeria','234'],['Egypt','20'],['Turkey','90'],['Russia','7'],['Brazil','55']
+];
+function ccLabel(c){ return c[0]+' (+'+c[1]+')'; }
+function findCountryByCode_(code){
+  for(var i=0;i<COUNTRIES.length;i++) if(COUNTRIES[i][1]===code) return COUNTRIES[i];
+  return null;
+}
+function ccDatalistHtml(){
+  return '<datalist id="ccList">'+COUNTRIES.map(function(c){ return '<option value="'+esc(ccLabel(c))+'">'; }).join('')+'</datalist>';
+}
+// Pull the dial-code digits out of a country field value like "India (+91)" or "91".
+function parseCC_(v){ var g=String(v||'').match(/\d+/g); return (g&&g.length)?g[g.length-1]:'91'; }
+// Split a stored phone into {country, local} for prefilling the two fields.
+function splitPhone_(phone){
+  var d=waDigits(phone), best=null;
+  for(var i=0;i<COUNTRIES.length;i++){ var c=COUNTRIES[i][1];
+    if(d.length>c.length && d.indexOf(c)===0 && (!best||c.length>best[1].length)) best=COUNTRIES[i]; }
+  if(best) return { country:best, local:d.slice(best[1].length) };
+  return { country:findCountryByCode_('91'), local:d };
+}
+// Searchable Role input (datalist) — allows picking a listed role or typing a custom one.
+function roleFieldHtml(id,value){
+  return '<input name="RoleApplied"'+(id?' id="'+id+'"':'')+' list="roleList" placeholder="Search or type…" value="'+esc(value||'')+'">'+
+    '<datalist id="roleList">'+ROLE_OPTIONS.map(function(r){ return '<option value="'+esc(r)+'">'; }).join('')+'</datalist>';
+}
+// Source dropdown (defaults to Advertisement); keeps any existing custom value.
+function sourceSelectHtml(value){
+  var v=(value==null||value==='')?'Advertisement':value, list=SOURCE_OPTIONS.slice();
+  if(list.indexOf(v)===-1) list.unshift(v);
+  return '<select name="Source">'+list.map(function(s){ return '<option'+(s===v?' selected':'')+'>'+esc(s)+'</option>'; }).join('')+'</select>';
+}
+
 // ============================================================
 // API
 // ============================================================
@@ -430,8 +474,8 @@ function openAddCandidate(){
       '<div class="field"><label>Name *</label><input name="Name" id="f_name" required></div>'+
       '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="f_phone"></div>'+
       '<div class="field"><label>Email</label><input name="Email" id="f_email" type="email"></div></div>'+
-      '<div class="field"><label>Role Applied</label><input name="RoleApplied" id="f_role" placeholder="Front Desk, Chef…"></div>'+
-      '<div class="field"><label>Source</label><input name="Source" placeholder="Referral, Naukri…"></div>'+
+      '<div class="field"><label>Role Applied</label>'+roleFieldHtml('f_role','')+'</div>'+
+      '<div class="field"><label>Source</label>'+sourceSelectHtml('')+'</div>'+
       '<div class="field"><label>Status</label><select name="Status"><option>New</option><option>Not Screened</option><option>Shortlisted</option></select></div>'+
       '<button class="btn btn-block" type="submit">Save Candidate</button>'+
     '</form>');
@@ -504,6 +548,7 @@ function openCandidate(id){
   var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
   if(!c){ toast('Not found. Refresh.','err'); return; }
   var p=state.user.permissions;
+  var sp=splitPhone_(c.Phone);
   var ivs=state.interviews.filter(function(x){return x.CandidateID===id;});
   var opts=['New','Not Screened','Shortlisted','Interviewed','Selected','Rejected','On Hold']
     .map(function(s){return '<option'+(c.Status===s?' selected':'')+'>'+s+'</option>';}).join('');
@@ -517,9 +562,10 @@ function openCandidate(id){
       '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div>'+
       (String(c.Phone||'').trim()?
         '<div class="row2" style="margin-top:10px">'+
+          '<div class="field"><label>Country code</label>'+
+            '<input id="waCC" list="ccList" value="'+esc(ccLabel(sp.country))+'" placeholder="Search country…">'+ccDatalistHtml()+'</div>'+
           '<div class="field"><label>WhatsApp number</label>'+
-            '<input id="waNum" value="'+esc(waDigits(c.Phone))+'" inputmode="tel"></div>'+
-          '<div class="field" style="align-self:end"><div class="muted tiny">Digits incl. country code, no +</div></div></div>'+
+            '<input id="waNum" value="'+esc(sp.local)+'" inputmode="tel" placeholder="number without code"></div></div>'+
         '<div class="field"><label>WhatsApp message (editable)</label>'+
           '<textarea id="waMsg" rows="10">'+esc(defaultWaMsg(c))+'</textarea></div>'+
         '<button class="btn btn-block" style="background:#25D366;border-color:#25D366;color:#fff" '+
@@ -577,11 +623,13 @@ function defaultWaMsg(c){
 function openWhatsApp(id){
   var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
   if(!c) return;
-  // Prefer the (editable) number field so a wrong/extra digit can be corrected.
-  var numBox=document.getElementById('waNum');
-  var d=(numBox&&numBox.value.trim())?numBox.value.replace(/[^\d]/g,''):waDigits(c.Phone);
+  // Prefer the (editable) fields so a wrong country code / extra digit can be
+  // corrected: combine the searchable country code with the local number.
+  var ccBox=document.getElementById('waCC'), numBox=document.getElementById('waNum');
+  var local=numBox?numBox.value.replace(/[^\d]/g,''):'';
+  var d=local ? (parseCC_(ccBox&&ccBox.value)+local) : waDigits(c.Phone);
   if(!d){ toast('No valid phone number.','err'); return; }
-  if(d.length<8||d.length>15){ toast('Number looks off ('+d.length+' digits). Include country code, no +, and check for extra digits.','err'); return; }
+  if(d.length<8||d.length>15){ toast('Number looks off ('+d.length+' digits). Pick the country code and enter the number without extra digits.','err'); return; }
   // Use whatever the user typed in the editable box; fall back to the default.
   var box=document.getElementById('waMsg');
   var text=(box&&box.value.trim())?box.value:defaultWaMsg(c);
@@ -613,8 +661,8 @@ function openEditCandidate(id){
       '<div class="field"><label>Name</label><input name="Name" id="e_name" value="'+esc(c.Name||'')+'"></div>'+
       '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="e_phone" value="'+esc(String(c.Phone||''))+'"></div>'+
       '<div class="field"><label>Email</label><input name="Email" id="e_email" value="'+esc(c.Email||'')+'"></div></div>'+
-      '<div class="row2"><div class="field"><label>Role Applied</label><input name="RoleApplied" value="'+esc(c.RoleApplied||'')+'"></div>'+
-      '<div class="field"><label>Source</label><input name="Source" value="'+esc(c.Source||'')+'"></div></div>'+
+      '<div class="row2"><div class="field"><label>Role Applied</label>'+roleFieldHtml('',c.RoleApplied||'')+'</div>'+
+      '<div class="field"><label>Source</label>'+sourceSelectHtml(c.Source||'')+'</div></div>'+
       '<button class="btn btn-block" type="submit">Save Changes</button>'+
     '</form>');
 }
@@ -721,11 +769,17 @@ function renderProfile(m){
     '<textarea id="waTmpl" rows="12">'+esc(state.waTemplate||'')+'</textarea>'+
     '<button class="btn btn-block" style="margin-top:10px" onclick="saveWaTemplate()">Save Template</button></div>';
   m.innerHTML='<div class="card" style="text-align:center"><div class="logo" style="margin:0 auto 10px;width:64px;height:64px;font-size:28px">'+initials(u.name)+'</div>'+
-      '<h3 style="margin:0;font-weight:800">'+esc(u.name)+'</h3><div class="muted small">'+esc(u.email)+'</div>'+
+      '<h3 style="margin:0;font-weight:800">'+esc(u.name)+' <a href="#" onclick="renameMe();return false" title="Edit your name" style="font-size:.8rem;text-decoration:none">✏️</a></h3><div class="muted small">'+esc(u.email)+'</div>'+
       '<span class="pill" style="margin-top:10px">'+esc(u.role)+'</span></div>'+
     '<div class="stack" style="margin-top:14px">'+extra+'</div>'+tmpl+
     '<div class="card" style="margin-top:14px"><div class="section-title" style="margin:0 0 6px">Permissions</div>'+
       Object.keys(u.permissions).map(function(k){ return '<div class="between small" style="padding:5px 0;border-bottom:1px solid #f1f5f9"><span>'+k+'</span><span>'+(u.permissions[k]?'✅':'—')+'</span></div>'; }).join('')+'</div>';
+}
+function renameMe(){
+  var nm=prompt('Your name (used in the message signature):', (state.user&&state.user.name)||'');
+  if(nm==null) return; nm=nm.trim(); if(!nm){ toast('Name cannot be empty.','err'); return; }
+  api('updateMyName',nm).then(function(res){ state.user.name=(res&&res.name)||nm; toast('Name updated.'); render(); })
+    .catch(function(e){ toast(e.message||'Failed.','err'); });
 }
 function saveWaTemplate(){
   var box=document.getElementById('waTmpl'); if(!box) return;

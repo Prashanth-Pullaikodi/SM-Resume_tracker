@@ -654,6 +654,20 @@ function addMessage(data) {
 // USERS (Admin)
 // ============================================================
 function getUsers() { authorizeUser_(['Admin']); return sheetToObjects_(getSheet_(CONFIG.SHEETS.USERS)); }
+// Let any signed-in user set their own display name (used in the message
+// signature via the {me} placeholder).
+function updateMyName(name) {
+  var me = getCurrentUser();
+  if (!me.authorized) throw new Error(me.message || 'Access denied.');
+  var nm = String(name == null ? '' : name).trim();
+  if (!nm) throw new Error('Name is required.');
+  var sheet = getSheet_(CONFIG.SHEETS.USERS);
+  var row = findRowByKey_(sheet, 2, me.email); // Users cols: UserID, Name, Email, Role
+  if (row === -1) sheet.appendRow([uuid_(), nm, me.email, me.role || 'Admin']);
+  else sheet.getRange(row, 2).setValue(nm);
+  logAudit_(me.email, 'updateMyName', { name: nm });
+  return { ok: true, name: nm };
+}
 function addUser(data) {
   var me = authorizeUser_(['Admin']);
   if (!data || !data.Email || !data.Role) throw new Error('Email and Role required.');
