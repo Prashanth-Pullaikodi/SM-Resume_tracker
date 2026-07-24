@@ -514,8 +514,12 @@ function openCandidate(id){
     '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:#fbfcfe">'+
       '<div class="small">📞 '+esc(c.Phone||'—')+'</div><div class="small" style="margin-top:5px">✉️ '+esc(c.Email||'—')+'</div>'+
       '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div>'+
-      (waDigits(c.Phone)?
-        '<div class="field" style="margin-top:10px"><label>WhatsApp message (editable)</label>'+
+      ((c.Phone||'').trim()?
+        '<div class="row2" style="margin-top:10px">'+
+          '<div class="field"><label>WhatsApp number</label>'+
+            '<input id="waNum" value="'+esc(waDigits(c.Phone))+'" inputmode="tel"></div>'+
+          '<div class="field" style="align-self:end"><div class="muted tiny">Digits incl. country code, no +</div></div></div>'+
+        '<div class="field"><label>WhatsApp message (editable)</label>'+
           '<textarea id="waMsg" rows="2">'+esc(defaultWaMsg(c))+'</textarea></div>'+
         '<button class="btn btn-block" style="background:#25D366;border-color:#25D366;color:#fff" '+
           'onclick="openWhatsApp(\''+id+'\')">💬 Message on WhatsApp</button>':'')+'</div>';
@@ -563,8 +567,11 @@ function defaultWaMsg(c){ return 'Hi '+(c.Name||'')+', regarding the '+(c.RoleAp
 function openWhatsApp(id){
   var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
   if(!c) return;
-  var d=waDigits(c.Phone);
+  // Prefer the (editable) number field so a wrong/extra digit can be corrected.
+  var numBox=document.getElementById('waNum');
+  var d=(numBox&&numBox.value.trim())?numBox.value.replace(/[^\d]/g,''):waDigits(c.Phone);
   if(!d){ toast('No valid phone number.','err'); return; }
+  if(d.length<8||d.length>15){ toast('Number looks off ('+d.length+' digits). Include country code, no +, and check for extra digits.','err'); return; }
   // Use whatever the user typed in the editable box; fall back to the default.
   var box=document.getElementById('waMsg');
   var text=(box&&box.value.trim())?box.value:defaultWaMsg(c);
