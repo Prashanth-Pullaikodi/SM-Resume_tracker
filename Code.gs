@@ -303,33 +303,13 @@ function bootstrapApp() {
 }
 
 // ============================================================
-// RESUME UPLOAD + AUTO-EXTRACT  (A + B: regex first, Gemini fallback)
+// RESUME UPLOAD + AUTO-EXTRACT  (offline, no AI)
 //
 // 1. Save the uploaded file to the configured Drive folder.
 // 2. Convert it to text (temp Google Doc, OCR for images) and run a fast
 //    offline regex pass — free, instant, good for clean text resumes.
-// 3. If any of name / phone / email is still missing AND a Gemini API key is
-//    configured, send the original file straight to Gemini Flash (it reads
-//    PDFs / images natively, so it also handles scanned/image-only PDFs) and
-//    fill in the gaps. Gemini also suggests the role.
+// 3. Whatever the parser can't detect is left blank for the user to fill in.
 // ============================================================
-function setGeminiKey(key) {
-  if (!key) throw new Error('Pass your Gemini API key, e.g. setGeminiKey("AIza...").');
-  PropertiesService.getScriptProperties().setProperty('GEMINI_API_KEY', String(key).trim());
-  return 'Gemini API key saved.';
-}
-function getGeminiKey_() {
-  return PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
-}
-function setGroqKey(key) {
-  if (!key) throw new Error('Pass your Groq API key, e.g. setGroqKey("gsk_...").');
-  PropertiesService.getScriptProperties().setProperty('GROQ_API_KEY', String(key).trim());
-  return 'Groq API key saved.';
-}
-function getGroqKey_() {
-  return PropertiesService.getScriptProperties().getProperty('GROQ_API_KEY') || '';
-}
-
 function scanResume(payload) {
   authorizeUser_(['Admin', 'HR']);
   if (!payload || !payload.base64 || !payload.fileName) throw new Error('Missing upload data.');
@@ -355,8 +335,7 @@ function scanResume(payload) {
       ok: true, duplicate: true,
       url: dup.getUrl(), fileName: dup.getName(),
       suggested: { name: '', phone: '', email: '', role: '' },
-      method: {}, usedAi: false, aiMode: '', aiConfigured: !!(getGeminiKey_() || getGroqKey_()),
-      aiError: '', extractedChars: 0, textOk: false, debugText: ''
+      method: {}, extractedChars: 0, textOk: false, debugText: ''
     };
   }
 
@@ -366,38 +345,16 @@ function scanResume(payload) {
   try { savedFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); }
   catch (e) { try { savedFile.setSharing(DriveApp.Access.DOMAIN_WITH_LINK, DriveApp.Permission.VIEW); } catch (e2) {} }
 
-  // --- Pass 1: offline parsing over Google-OCR'd text (free, no quota) ---
+  // --- Offline parsing over Google-OCR'd text (free, no quota) ---
   var text = '';
   try { text = extractText_(savedBlob, mime, folder.getId()); }
   catch (e) { logAudit_(getActiveEmail_(), 'extractTextFailed', { file: savedName, err: e.message }); }
   // Some PDFs have a broken/encoded text layer that converts to garbage. If the
-  // text doesn't look like real words, treat it as empty so text-only parsing
-  // (regex / Groq) is skipped and AI is asked to READ THE FILE instead.
+  // text doesn't look like real words, treat it as empty so we don't parse junk.
   var goodText = textLooksReal_(text) ? text : '';
   var out = parseResume_(goodText, payload.fileName);
   out.role = out.role || '';
   var method = { name: out.name ? 'regex' : '', phone: out.phone ? 'regex' : '', email: out.email ? 'regex' : '' };
-
-  // --- Pass 2: AI fallback for whatever regex missed. Gemini first (it can read
-  // the file itself — handles scanned / broken-text-layer PDFs), then Groq
-  // (text-only, only useful when we have real text). Best-effort; never blocks. ---
-  var usedAi = false, aiError = '', aiMode = '';
-  function mergeAi_(ai) {
-    usedAi = true; aiMode = ai.__mode;
-    ['name', 'phone', 'email', 'role'].forEach(function (f) {
-      if ((!out[f] || out[f] === '') && ai[f]) { out[f] = ai[f]; if (f !== 'role') method[f] = 'ai'; }
-    });
-  }
-  function stillMissing_() { return !out.name || !out.phone || !out.email; }
-
-  if (stillMissing_() && getGeminiKey_()) {
-    try { mergeAi_(geminiExtract_(goodText, b64, mime)); }
-    catch (e) { aiError = 'Gemini: ' + e.message; logAudit_(getActiveEmail_(), 'geminiFailed', { file: savedName, err: e.message }); }
-  }
-  if (stillMissing_() && getGroqKey_() && goodText && goodText.length > 60) {
-    try { mergeAi_(groqExtract_(goodText)); aiError = ''; }
-    catch (e) { aiError = (aiError ? aiError + ' | ' : '') + 'Groq: ' + e.message; logAudit_(getActiveEmail_(), 'groqFailed', { file: savedName, err: e.message }); }
-  }
 
   return {
     ok: true,
@@ -405,10 +362,6 @@ function scanResume(payload) {
     fileName: savedName,
     suggested: { name: out.name, phone: out.phone, email: out.email, role: out.role || '' },
     method: method,
-    usedAi: usedAi,
-    aiMode: aiMode,
-    aiConfigured: !!(getGeminiKey_() || getGroqKey_()),
-    aiError: aiError,
     extractedChars: text.length,
     textOk: !!goodText,
     debugText: (text || '').replace(/\s+/g, ' ').trim().slice(0, 600)
@@ -438,124 +391,6 @@ function extractText_(blob, mime, parentFolderId) {
   try { text = DocumentApp.openById(docId).getBody().getText() || ''; }
   finally { try { Drive.Files.update({ trashed: true }, docId); } catch (e) {} }
   return text;
-}
-
-// Call Gemini for structured JSON, with automatic failover across several
-// models so a single overload (503) or daily-quota (429) doesn't kill it.
-//   TEXT mode — Drive-OCR text is sent (cheap; generous text quota).
-//   FILE mode — only when OCR returned nothing (image-only PDF). Sends bytes.
-// Model list: Script Property GEMINI_MODEL (comma-separated) overrides the
-// default chain. Each model is tried once; on a transient/quota error we move
-// to the next model after a short pause.
-function geminiExtract_(extractedText, base64, mime) {
-  var key = getGeminiKey_();
-  if (!key) throw new Error('No Gemini API key configured.');
-  var override = PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || '';
-  var models = override
-    ? override.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-    : ['gemini-2.5-flash-lite', 'gemini-2.0-flash-lite', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-
-  var prompt = 'Extract fields from this job candidate resume. Return ONLY JSON ' +
-    'with keys: name, phone, email, role. name = candidate full name. ' +
-    'phone = primary phone, digits only with optional + country code. ' +
-    'email = primary email. role = job title they are applying for or current designation. ' +
-    'Use an empty string for any field not present.';
-
-  var parts, mode;
-  if (extractedText && extractedText.length > 60) {
-    parts = [{ text: prompt + '\n\nRESUME TEXT:\n' + extractedText.slice(0, 8000) }];
-    mode = 'TEXT';
-  } else {
-    var sendMime = mime;
-    if (['application/pdf', 'image/png', 'image/jpeg', 'image/webp', 'text/plain'].indexOf(mime) === -1) sendMime = 'application/pdf';
-    parts = [{ text: prompt }, { inline_data: { mime_type: sendMime, data: base64 } }];
-    mode = 'FILE';
-  }
-  var body = JSON.stringify({ contents: [{ parts: parts }], generationConfig: { temperature: 0, responseMimeType: 'application/json' } });
-
-  var lastErr = '';
-  for (var i = 0; i < models.length; i++) {
-    var model = models[i];
-    var url = 'https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent?key=' + encodeURIComponent(key);
-    var resp = UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', payload: body, muteHttpExceptions: true });
-    var code = resp.getResponseCode();
-    var raw = resp.getContentText();
-    if (code === 200) {
-      var json = JSON.parse(raw);
-      var txt = json && json.candidates && json.candidates[0] && json.candidates[0].content &&
-                json.candidates[0].content.parts && json.candidates[0].content.parts[0] &&
-                json.candidates[0].content.parts[0].text;
-      if (!txt) { lastErr = model + ': empty response'; continue; }
-      var parsed = JSON.parse(txt);
-      return {
-        name: String(parsed.name || '').trim(),
-        phone: String(parsed.phone || '').replace(/[^\d+]/g, ''),
-        email: String(parsed.email || '').trim(),
-        role: String(parsed.role || '').trim(),
-        __mode: mode + ':' + model
-      };
-    }
-    // Transient (503/500/429) or model-missing (404): record and try next model.
-    lastErr = model + ' HTTP ' + code;
-    if (code === 503 || code === 500 || code === 429) { Utilities.sleep(700); continue; }
-    if (code === 404) { continue; }
-    // Other errors (bad key, etc.) are not retryable.
-    throw new Error('Gemini HTTP ' + code + ': ' + raw.slice(0, 160));
-  }
-  throw new Error('All Gemini models busy/over quota (' + lastErr + '). Google OCR still saved & parsed what it could — fill any gaps manually.');
-}
-
-// Groq (OpenAI-compatible) — text-only fallback using the OCR'd resume text.
-// Free tier is fast and high-limit. Model chain via Script Property GROQ_MODEL
-// (comma-separated) or the default below.
-function groqExtract_(extractedText) {
-  var key = getGroqKey_();
-  if (!key) throw new Error('No Groq API key configured.');
-  if (!extractedText || extractedText.length < 60) throw new Error('No resume text for Groq to read.');
-  var override = PropertiesService.getScriptProperties().getProperty('GROQ_MODEL') || '';
-  var models = override
-    ? override.split(',').map(function (s) { return s.trim(); }).filter(Boolean)
-    : ['llama-3.1-8b-instant', 'llama-3.3-70b-versatile'];
-
-  var sys = 'You extract fields from a job candidate resume and reply with ONLY a JSON object ' +
-    'with keys name, phone, email, role. name=full name; phone=primary phone digits with optional + country code; ' +
-    'email=primary email; role=job title applied for or current designation. Empty string if absent.';
-  var body = JSON.stringify({
-    model: '__MODEL__',
-    messages: [{ role: 'system', content: sys }, { role: 'user', content: extractedText.slice(0, 8000) }],
-    temperature: 0,
-    response_format: { type: 'json_object' }
-  });
-
-  var lastErr = '';
-  for (var i = 0; i < models.length; i++) {
-    var payload = body.replace('__MODEL__', models[i]);
-    var resp = UrlFetchApp.fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'post', contentType: 'application/json',
-      headers: { Authorization: 'Bearer ' + key },
-      payload: payload, muteHttpExceptions: true
-    });
-    var code = resp.getResponseCode();
-    var raw = resp.getContentText();
-    if (code === 200) {
-      var json = JSON.parse(raw);
-      var content = json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content;
-      if (!content) { lastErr = models[i] + ': empty'; continue; }
-      var parsed = JSON.parse(content);
-      return {
-        name: String(parsed.name || '').trim(),
-        phone: String(parsed.phone || '').replace(/[^\d+]/g, ''),
-        email: String(parsed.email || '').trim(),
-        role: String(parsed.role || '').trim(),
-        __mode: 'GROQ:' + models[i]
-      };
-    }
-    lastErr = models[i] + ' HTTP ' + code;
-    if (code === 503 || code === 500 || code === 429) { Utilities.sleep(700); continue; }
-    if (code === 404) { continue; }
-    throw new Error('Groq HTTP ' + code + ': ' + raw.slice(0, 160));
-  }
-  throw new Error('All Groq models busy/over quota (' + lastErr + ').');
 }
 
 function parseResume_(text, fileNameHint) {

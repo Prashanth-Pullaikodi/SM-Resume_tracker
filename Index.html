@@ -440,7 +440,7 @@ function openAddCandidate(){
 function onResumePicked(input){
   var file=input.files&&input.files[0]; if(!file) return;
   if(file.size>20*1024*1024){ setScan('fail','File too large (max 20 MB).'); return; }
-  setScan('work','Uploading & reading “'+file.name+'”… (AI may take a few seconds)');
+  setScan('work','Uploading & reading “'+file.name+'”…');
   var reader=new FileReader();
   reader.onerror=function(){ setScan('fail','Could not read the file.'); };
   reader.onload=function(){
@@ -457,18 +457,9 @@ function onResumePicked(input){
         if(s.phone){ document.getElementById('f_phone').value=s.phone; filled.push('phone'); }
         if(s.email){ document.getElementById('f_email').value=s.email; filled.push('email'); }
         if(s.role){ var rl=document.getElementById('f_role'); if(rl&&!rl.value){ rl.value=s.role; filled.push('role'); } }
-        var src=res.usedAi?(' (AI · '+(res.aiMode||'')+')'):'';
         var extra='';
-        if(!res.textOk){ extra=' Note: this PDF’s text layer is unreadable, so AI must read the file itself.'; }
-        if(filled.length){ setScan('done','Saved to Drive · auto-filled '+filled.join(', ')+src+'. Please verify.',res); }
-        else if(res.aiError){
-          var busy=/busy|503|overload/i.test(res.aiError), quota=/429|quota|limit/i.test(res.aiError);
-          var why=busy?'AI is temporarily busy — try again in a moment, or fill the fields manually.'
-            :(quota?'AI daily free limit reached — fill manually (resets at Pacific midnight), switch GEMINI_MODEL, or add a Groq key.'
-            :'AI couldn’t read this one — please fill manually.');
-          setScan('fail','Saved to Drive. '+why+extra,res);
-        }
-        else if(!res.aiConfigured){ setScan('fail','Saved to Drive. Couldn’t auto-detect — set a Gemini/Groq key (see README) for AI extraction, or fill manually.'+extra,res); }
+        if(!res.textOk){ extra=' Note: this PDF’s text layer is unreadable — please fill the details in.'; }
+        if(filled.length){ setScan('done','Saved to Drive · auto-filled '+filled.join(', ')+'. Please verify.',res); }
         else { setScan('fail','Saved to Drive. Couldn’t auto-detect details — please fill them in.'+extra,res); }
       })
       .catch(function(err){ setScan('fail','Upload failed: '+(err.message||'error')); });
