@@ -273,13 +273,25 @@ function findCountryByCode_(code){
 function ccDatalistHtml(){
   return '<datalist id="ccList">'+COUNTRIES.map(function(c){ return '<option value="'+esc(ccLabel(c))+'">'; }).join('')+'</datalist>';
 }
+// Searchable country-code input (no name attr, so it's read by id, not formData).
+// Defaults to India when no code given.
+function ccFieldHtml(id,code){
+  var c=findCountryByCode_(code||'91')||findCountryByCode_('91');
+  return '<input id="'+id+'" list="ccList" value="'+esc(ccLabel(c))+'" placeholder="Search country…">'+ccDatalistHtml();
+}
 // Pull the dial-code digits out of a country field value like "India (+91)" or "91".
 function parseCC_(v){ var g=String(v||'').match(/\d+/g); return (g&&g.length)?g[g.length-1]:'91'; }
 // Split a stored phone into {country, local} for prefilling the two fields.
+// Defaults to India; only strips a country code when confident to avoid
+// mis-detecting a bare local number (e.g. treating a leading "1" as US).
 function splitPhone_(phone){
-  var d=waDigits(phone), best=null;
+  var d=waDigits(phone);
+  if(/^91\d{10}$/.test(d)) return { country:findCountryByCode_('91'), local:d.slice(2) };
+  if(/^\d{10}$/.test(d)) return { country:findCountryByCode_('91'), local:d };
+  var best=null;
   for(var i=0;i<COUNTRIES.length;i++){ var c=COUNTRIES[i][1];
-    if(d.length>c.length && d.indexOf(c)===0 && (!best||c.length>best[1].length)) best=COUNTRIES[i]; }
+    if(c.length>=2 && d.indexOf(c)===0){ var rest=d.length-c.length;
+      if(rest>=6 && rest<=11 && (!best||c.length>best[1].length)) best=COUNTRIES[i]; } }
   if(best) return { country:best, local:d.slice(best[1].length) };
   return { country:findCountryByCode_('91'), local:d };
 }
@@ -472,8 +484,9 @@ function openAddCandidate(){
       '<div id="scanStatus"></div>'+
       '<input type="hidden" name="ResumeLink" id="resumeLink">'+
       '<div class="field"><label>Name *</label><input name="Name" id="f_name" required></div>'+
-      '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="f_phone"></div>'+
-      '<div class="field"><label>Email</label><input name="Email" id="f_email" type="email"></div></div>'+
+      '<div class="row2"><div class="field"><label>Country code</label>'+ccFieldHtml('f_cc','91')+'</div>'+
+      '<div class="field"><label>Phone</label><input name="Phone" id="f_phone" inputmode="tel" placeholder="number without code"></div></div>'+
+      '<div class="field"><label>Email</label><input name="Email" id="f_email" type="email"></div>'+
       '<div class="field"><label>Role Applied</label>'+roleFieldHtml('f_role','')+'</div>'+
       '<div class="field"><label>Source</label>'+sourceSelectHtml('')+'</div>'+
       '<div class="field"><label>Status</label><select name="Status"><option>New</option><option>Not Screened</option><option>Shortlisted</option></select></div>'+
@@ -495,7 +508,8 @@ function onResumePicked(input){
         if(res.url) document.getElementById('resumeLink').value=res.url;
         var s=res.suggested||{}, filled=[];
         if(s.name){ document.getElementById('f_name').value=s.name; filled.push('name'); }
-        if(s.phone){ document.getElementById('f_phone').value=s.phone; filled.push('phone'); }
+        if(s.phone){ var sp=splitPhone_(s.phone); var ccEl=document.getElementById('f_cc');
+          if(ccEl) ccEl.value=ccLabel(sp.country); document.getElementById('f_phone').value=sp.local; filled.push('phone'); }
         if(s.email){ document.getElementById('f_email').value=s.email; filled.push('email'); }
         if(s.role){ var rl=document.getElementById('f_role'); if(rl&&!rl.value){ rl.value=s.role; filled.push('role'); } }
         var extra='';
@@ -530,6 +544,9 @@ function fieldErr(id,bad,msg){
 }
 function submitCandidate(e){
   e.preventDefault(); var d=formData(e.target);
+  // Prefix the searchable country code onto the local number before saving.
+  var local=String(d.Phone||'').replace(/[^\d]/g,'');
+  if(local){ var ccEl=document.getElementById('f_cc'); d.Phone='+'+parseCC_(ccEl&&ccEl.value)+local; }
   // Client-side validation before the round-trip.
   var ok=true;
   if(d.Email&&!validEmail(d.Email)){ fieldErr('f_email',true,'Enter a valid email.'); ok=false; } else fieldErr('f_email',false);
@@ -656,11 +673,13 @@ function submitMessage(e,id){
 function openEditCandidate(id){
   var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
   if(!c) return;
+  var ep=splitPhone_(c.Phone);
   openModal('Edit Candidate',
     '<form id="editForm" onsubmit="submitEditCandidate(event,\''+id+'\')" class="stack">'+
       '<div class="field"><label>Name</label><input name="Name" id="e_name" value="'+esc(c.Name||'')+'"></div>'+
-      '<div class="row2"><div class="field"><label>Phone</label><input name="Phone" id="e_phone" value="'+esc(String(c.Phone||''))+'"></div>'+
-      '<div class="field"><label>Email</label><input name="Email" id="e_email" value="'+esc(c.Email||'')+'"></div></div>'+
+      '<div class="row2"><div class="field"><label>Country code</label>'+ccFieldHtml('e_cc',ep.country[1])+'</div>'+
+      '<div class="field"><label>Phone</label><input name="Phone" id="e_phone" value="'+esc(ep.local)+'" inputmode="tel"></div></div>'+
+      '<div class="field"><label>Email</label><input name="Email" id="e_email" value="'+esc(c.Email||'')+'"></div>'+
       '<div class="row2"><div class="field"><label>Role Applied</label>'+roleFieldHtml('',c.RoleApplied||'')+'</div>'+
       '<div class="field"><label>Source</label>'+sourceSelectHtml(c.Source||'')+'</div></div>'+
       '<button class="btn btn-block" type="submit">Save Changes</button>'+
@@ -669,6 +688,8 @@ function openEditCandidate(id){
 function submitEditCandidate(e,id){
   e.preventDefault();
   var d=formData(e.target), ok=true;
+  var local=String(d.Phone||'').replace(/[^\d]/g,'');
+  if(local){ var ccEl=document.getElementById('e_cc'); d.Phone='+'+parseCC_(ccEl&&ccEl.value)+local; }
   if(!d.Name||!d.Name.trim()){ fieldErr('e_name',true,'Name is required.'); ok=false; } else fieldErr('e_name',false);
   if(d.Email&&!validEmail(d.Email)){ fieldErr('e_email',true,'Enter a valid email.'); ok=false; } else fieldErr('e_email',false);
   if(d.Phone&&!validPhone(d.Phone)){ fieldErr('e_phone',true,'Enter a valid phone (7–15 digits).'); ok=false; } else fieldErr('e_phone',false);
