@@ -245,7 +245,7 @@ console.info('SM Recruitment — build 2026.06.25-modern');
 // ============================================================
 // STATE
 // ============================================================
-var state={ user:null, view:'dashboard', candidates:[], interviews:[], kpis:{}, metrics:{}, roleStats:[],
+var state={ user:null, view:'dashboard', candidates:[], interviews:[], messages:[], kpis:{}, metrics:{}, roleStats:[],
   filter:{status:'PENDING',q:''}, loaded:false, busy:false };
 var CHIPS=[{k:'PENDING',l:'Pending'},{k:'',l:'All'},{k:'New',l:'New'},{k:'Not Screened',l:'Not Screened'},
   {k:'Shortlisted',l:'Shortlisted'},{k:'Interviewed',l:'Interviewed'},
@@ -312,7 +312,7 @@ function boot(){
   }).catch(function(e){ showGate((e&&e.message)||'Failed to load.'); });
 }
 function apply(d){
-  state.user=d.user; state.candidates=d.candidates||[]; state.interviews=d.interviews||[];
+  state.user=d.user; state.candidates=d.candidates||[]; state.interviews=d.interviews||[]; state.messages=d.messages||[];
   state.kpis=d.kpis||{}; state.metrics=d.metrics||{}; state.roleStats=d.roleStats||[]; state.loaded=true;
 }
 function refresh(){
@@ -525,7 +525,9 @@ function openCandidate(id){
       '<span class="badge b-'+badge(c.Status)+'">'+esc(c.Status)+'</span></div>'+
     '<div class="card" style="box-shadow:none;border:1px solid var(--line);background:#fbfcfe">'+
       '<div class="small">📞 '+esc(c.Phone||'—')+'</div><div class="small" style="margin-top:5px">✉️ '+esc(c.Email||'—')+'</div>'+
-      '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div></div>';
+      '<div class="small" style="margin-top:5px">🔗 '+(c.ResumeLink?'<a class="link" href="'+esc(c.ResumeLink)+'" target="_blank">View Resume</a>':'No resume')+'</div>'+
+      (waDigits(c.Phone)?'<button class="btn btn-block" style="margin-top:10px;background:#25D366;border-color:#25D366;color:#fff" '+
+        'onclick="openWhatsApp(\''+id+'\')">💬 Message on WhatsApp</button>':'')+'</div>';
   if(p.changeStatus) html+='<div class="field"><label>Update Status</label><div style="display:flex;gap:8px">'+
     '<select id="newStatus">'+opts+'</select><button class="btn btn-sm" onclick="changeStatus(\''+id+'\')">Save</button></div></div>';
   if(p.scheduleInterview) html+='<button class="btn btn-ghost btn-block" onclick="openInterview(\''+id+'\')">＋ Schedule Interview</button>';
@@ -536,8 +538,53 @@ function openCandidate(id){
         '<div class="small">'+esc(iv.Interviewer||'—')+' · '+esc(iv.Status||'—')+' · Score '+esc(iv.Score||'—')+'</div>'+
         (iv.Feedback?'<div class="small" style="margin-top:4px">'+esc(iv.Feedback)+'</div>':'')+
         (p.addFeedback?'<button class="btn btn-light btn-sm" style="margin-top:8px" onclick="openFeedback(\''+iv.InterviewID+'\')">Add/Edit Feedback</button>':'')+'</div>';
-    }).join(''):'<div class="muted small">No interviews yet.</div>')+'</div>';
+    }).join(''):'<div class="muted small">No interviews yet.</div>');
+  // ---- WhatsApp conversation log ----
+  var msgs=state.messages.filter(function(x){return x.CandidateID===id;})
+    .sort(function(a,b){return new Date(b.Timestamp)-new Date(a.Timestamp);});
+  html+='<div class="section-title" style="margin-left:0">WhatsApp Log</div>'+
+    (msgs.length?msgs.map(function(msg){
+      return '<div class="card" style="padding:12px;box-shadow:none;border:1px solid var(--line)"><div class="between">'+
+        '<strong>'+esc(msg.Direction||'Note')+'</strong><span class="muted tiny">'+fdate(msg.Timestamp)+'</span></div>'+
+        '<div class="small" style="margin-top:4px;white-space:pre-wrap">'+esc(msg.Body||'')+'</div>'+
+        '<div class="muted tiny" style="margin-top:4px">'+esc(msg.By||'')+'</div></div>';
+    }).join(''):'<div class="muted small">No messages logged yet.</div>');
+  if(p.addFeedback) html+='<form onsubmit="submitMessage(event,\''+id+'\')" class="stack" style="margin-top:10px">'+
+    '<div class="field"><label>Log what was discussed</label>'+
+      '<textarea id="msgBody" rows="2" placeholder="e.g. Discussed joining date & expected salary…"></textarea></div>'+
+    '<div class="row2"><div class="field"><label>Type</label>'+
+      '<select id="msgDir"><option value="Note">Note</option><option value="Sent">Sent</option><option value="Received">Received</option></select></div>'+
+      '<div class="field" style="align-self:end"><button class="btn btn-block" type="submit">Save to log</button></div></div></form>';
+  html+='</div>';
   openModal('Candidate',html);
+}
+// Normalise a phone to wa.me digits (country code + number, no +/spaces).
+// Bare 10-digit Indian mobiles get a 91 prefix; numbers with a leading 0 lose it.
+function waDigits(phone){
+  var d=String(phone||'').replace(/[^\d]/g,'');
+  if(!d) return '';
+  if(d.length===10&&/^[6-9]/.test(d)) d='91'+d;
+  else if(d.length===11&&d.charAt(0)==='0') d='91'+d.slice(1);
+  return d;
+}
+function openWhatsApp(id){
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
+  if(!c) return;
+  var d=waDigits(c.Phone);
+  if(!d){ toast('No valid phone number.','err'); return; }
+  var text='Hi '+(c.Name||'')+', regarding the '+(c.RoleApplied||'')+' opportunity at SM.';
+  window.open('https://wa.me/'+d+'?text='+encodeURIComponent(text),'_blank');
+}
+function submitMessage(e,id){
+  e.preventDefault();
+  var body=(document.getElementById('msgBody').value||'').trim();
+  var dir=document.getElementById('msgDir').value;
+  if(!body){ toast('Enter what was discussed.','err'); return; }
+  var btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
+  api('addMessage',{CandidateID:id,Direction:dir,Body:body}).then(function(res){
+    state.messages.push({MessageID:res.MessageID,CandidateID:id,Direction:res.Direction,Body:body,By:res.By,Timestamp:res.Timestamp});
+    toast('Logged.'); openCandidate(id);
+  }).catch(function(err){ btn.disabled=false; btn.textContent='Save to log'; toast(err.message||'Failed.','err'); });
 }
 function changeStatus(id){
   var v=document.getElementById('newStatus').value;

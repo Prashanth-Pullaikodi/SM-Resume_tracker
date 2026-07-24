@@ -21,6 +21,7 @@ var CONFIG = {
   SHEETS: {
     CANDIDATES: 'Candidates',
     INTERVIEWS: 'Interviews',
+    MESSAGES: 'Messages',
     USERS: 'Users',
     AUDIT_LOG: 'AuditLog'
   },
@@ -78,6 +79,22 @@ function getSpreadsheet_() {
 function getSheet_(name) {
   var sh = getSpreadsheet_().getSheetByName(name);
   if (!sh) throw new Error('Sheet "' + name + '" not found. Run initialSetup().');
+  return sh;
+}
+// Ensure the Messages sheet exists even on deployments created before this
+// feature was added (initialSetup may have already run without it).
+function ensureMessagesSheet_() {
+  var ss = getSpreadsheet_();
+  var name = CONFIG.SHEETS.MESSAGES;
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+    var headers = ['MessageID', 'CandidateID', 'Direction', 'Body', 'By', 'Timestamp'];
+    sh.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sh.setFrozenRows(1);
+    sh.getRange(1, 1, 1, headers.length).setFontWeight('bold')
+      .setBackground('#6366f1').setFontColor('#ffffff');
+  }
   return sh;
 }
 function getResumesFolder_() {
@@ -155,6 +172,7 @@ function initialSetup() {
   var defs = {
     'Candidates': ['CandidateID', 'Name', 'Phone', 'Email', 'RoleApplied', 'ResumeLink', 'Source', 'Status', 'CreatedAt'],
     'Interviews': ['InterviewID', 'CandidateID', 'Round', 'Interviewer', 'DateTime', 'Status', 'Feedback', 'Score'],
+    'Messages': ['MessageID', 'CandidateID', 'Direction', 'Body', 'By', 'Timestamp'],
     'Users': ['UserID', 'Name', 'Email', 'Role'],
     'AuditLog': ['LogID', 'Email', 'Action', 'Details', 'Timestamp']
   };
@@ -244,6 +262,7 @@ function bootstrapApp() {
   if (!user.authorized) return { user: user };
   var candidates = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
   var interviews = sheetToObjects_(getSheet_(CONFIG.SHEETS.INTERVIEWS));
+  var messages = sheetToObjects_(ensureMessagesSheet_());
   if (user.role === 'Interviewer') {
     var mine = {};
     interviews = interviews.filter(function (i) {
@@ -251,6 +270,7 @@ function bootstrapApp() {
       if (keep) mine[i.CandidateID] = true; return keep;
     });
     candidates = candidates.filter(function (c) { return mine[c.CandidateID]; });
+    messages = messages.filter(function (msg) { return mine[msg.CandidateID]; });
   }
   var counts = {}; CONFIG.STATUSES.forEach(function (s) { counts[s] = 0; });
   var roleMap = {};
@@ -265,7 +285,7 @@ function bootstrapApp() {
   var screened = counts['Shortlisted'] + counts['Interviewed'] + counts['Selected'] + counts['Rejected'];
   var interviewedPlus = counts['Interviewed'] + counts['Selected'];
   return {
-    user: user, candidates: candidates, interviews: interviews,
+    user: user, candidates: candidates, interviews: interviews, messages: messages,
     kpis: {
       total: candidates.length, new: counts['New'], notScreened: counts['Not Screened'],
       shortlisted: counts['Shortlisted'], interviewed: counts['Interviewed'],
@@ -683,6 +703,36 @@ function updateInterviewFeedback(data) {
   });
   logAudit_(me.email, 'updateFeedback', { id: data.InterviewID });
   return { ok: true };
+}
+
+// ============================================================
+// MESSAGES (WhatsApp conversation log)
+//
+// WhatsApp Web click-to-chat (wa.me) opens the chat from the browser but can't
+// read replies back, so the record of "what was discussed" is captured here as
+// a manual note/log entry against the candidate.
+// ============================================================
+function addMessage(data) {
+  var me = authorizeUser_(['Admin', 'HR', 'Interviewer']);
+  if (!data || !data.CandidateID) throw new Error('CandidateID required.');
+  var body = String(data.Body || '').trim();
+  if (!body) throw new Error('Please enter what was discussed.');
+
+  // Candidate must exist.
+  var cands = sheetToObjects_(getSheet_(CONFIG.SHEETS.CANDIDATES));
+  var found = false;
+  for (var i = 0; i < cands.length; i++) {
+    if (String(cands[i].CandidateID) === String(data.CandidateID)) { found = true; break; }
+  }
+  if (!found) throw new Error('Candidate not found.');
+
+  var allowed = ['Sent', 'Received', 'Note'];
+  var direction = allowed.indexOf(data.Direction) !== -1 ? data.Direction : 'Note';
+  var id = uuid_();
+  var ts = nowIso_();
+  ensureMessagesSheet_().appendRow([id, data.CandidateID, direction, body, me.email, ts]);
+  logAudit_(me.email, 'addMessage', { id: id, candidate: data.CandidateID, direction: direction });
+  return { ok: true, MessageID: id, Timestamp: ts, By: me.email, Direction: direction };
 }
 
 // ============================================================
