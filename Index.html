@@ -725,22 +725,65 @@ function renderInterviews(m){
       (state.user.permissions.addFeedback?'<button class="btn btn-light btn-sm" style="margin-top:8px" onclick="openFeedback(\''+iv.InterviewID+'\')">Feedback</button>':'')+'</div>';
   }).join('');
 }
+// Default (editable) interview-invite message. {when} = chosen date/time.
+function ivDefaultMsg(c,round,dt){
+  var when=dt?fdate(dt):'(date & time to be confirmed)';
+  var me=(state.user&&state.user.name)||'';
+  return 'Hello '+((c&&c.Name)||'')+',\n\n'+
+    'We are pleased to invite you for a '+(round||'')+' interview for the '+((c&&c.RoleApplied)||'')+' role at SandalMist Resort, Kasaragod.\n\n'+
+    'Date & Time: '+when+'\n\n'+
+    'Please confirm your availability by replying to this message. Feel free to reach out if you have any questions.\n\n'+
+    'Regards\n'+me;
+}
+// Keep the message in sync with Round/Date changes until the user edits it.
+function ivSync(){
+  var ta=document.getElementById('ivMsg'); if(!ta||ta.dataset.auto!=='1') return;
+  var idEl=document.querySelector('#modal [name=CandidateID]'), id=idEl?idEl.value:'';
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===id) c=state.candidates[i];
+  var round=(document.querySelector('#modal [name=Round]')||{}).value||'';
+  var dt=(document.querySelector('#modal [name=DateTime]')||{}).value||'';
+  ta.value=ivDefaultMsg(c,round,dt);
+}
 function openInterview(candidateId){
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===candidateId) c=state.candidates[i];
+  c=c||{};
+  var hasEmail=!!(c.Email&&String(c.Email).trim()), hasPhone=!!String(c.Phone||'').trim();
   openModal('Schedule Interview',
     '<form onsubmit="submitInterview(event)" class="stack"><input type="hidden" name="CandidateID" value="'+candidateId+'">'+
-      '<div class="field"><label>Round</label><select name="Round"><option>HR</option><option>Technical</option><option>Manager</option></select></div>'+
+      '<div class="field"><label>Round</label><select name="Round" onchange="ivSync()"><option>HR</option><option>Technical</option><option>Manager</option></select></div>'+
       '<div class="field"><label>Interviewer Email</label><input name="Interviewer" type="email" required></div>'+
-      '<div class="field"><label>Date &amp; Time</label><input name="DateTime" type="datetime-local" required></div>'+
+      '<div class="field"><label>Date &amp; Time</label><input name="DateTime" type="datetime-local" required onchange="ivSync()"></div>'+
       '<div class="field"><label>Status</label><select name="Status"><option>Scheduled</option><option>Completed</option><option>Cancelled</option></select></div>'+
-      '<button class="btn btn-block" type="submit">Save Interview</button></form>');
+      '<div class="section-title" style="margin-left:0">Notify candidate</div>'+
+      '<div class="field"><label>Message (editable)</label>'+
+        '<textarea id="ivMsg" rows="9" data-auto="1" oninput="this.dataset.auto=\'0\'">'+esc(ivDefaultMsg(c,'HR',''))+'</textarea></div>'+
+      '<label class="between small" style="padding:3px 2px"><span>✉️ Email candidate'+(hasEmail?' ('+esc(c.Email)+')':' — no email on file')+'</span>'+
+        '<input type="checkbox" id="ivEmail"'+(hasEmail?' checked':' disabled')+'></label>'+
+      '<label class="between small" style="padding:3px 2px"><span>💬 Open WhatsApp'+(hasPhone?'':' — no phone on file')+'</span>'+
+        '<input type="checkbox" id="ivWa"'+(hasPhone?' checked':' disabled')+'></label>'+
+      '<button class="btn btn-block" type="submit">Save &amp; Send</button></form>');
 }
 function submitInterview(e){
   e.preventDefault(); var d=formData(e.target);
+  var msg=(document.getElementById('ivMsg')||{}).value||'';
+  var doEmail=!!(document.getElementById('ivEmail')&&document.getElementById('ivEmail').checked);
+  var doWa=!!(document.getElementById('ivWa')&&document.getElementById('ivWa').checked);
+  var c=null; for(var i=0;i<state.candidates.length;i++) if(state.candidates[i].CandidateID===d.CandidateID) c=state.candidates[i];
+  // Open WhatsApp inside the click gesture (avoids the popup blocker).
+  if(doWa&&c){ var wnum=waDigits(c.Phone);
+    if(wnum){ var isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      window.open((isMobile?'https://wa.me/'+wnum+'?text=':'https://web.whatsapp.com/send?phone='+wnum+'&text=')+encodeURIComponent(msg),'_blank'); }
+    else toast('No phone number for WhatsApp.','err'); }
+  var btn=e.target.querySelector('button[type=submit]'); btn.disabled=true; btn.textContent='Saving…';
   api('addInterview',d).then(function(res){
     state.interviews.push({ InterviewID:res.InterviewID, CandidateID:d.CandidateID, Round:d.Round, Interviewer:d.Interviewer,
       DateTime:d.DateTime, Status:d.Status||'Scheduled', Feedback:'', Score:'' });
+    if(doEmail&&c&&c.Email){
+      api('sendInterviewEmail',{to:c.Email,candidateId:c.CandidateID,body:msg}).then(function(){ toast('Invite emailed to candidate.'); })
+        .catch(function(err){ toast('Saved, but email failed: '+(err.message||'error'),'err'); });
+    }
     closeModal(); toast('Interview scheduled.'); refresh();
-  }).catch(function(err){ toast(err.message||'Failed.','err'); });
+  }).catch(function(err){ btn.disabled=false; btn.textContent='Save & Send'; toast(err.message||'Failed.','err'); });
 }
 function openFeedback(id){
   var iv=null; for(var i=0;i<state.interviews.length;i++) if(state.interviews[i].InterviewID===id) iv=state.interviews[i]; iv=iv||{};

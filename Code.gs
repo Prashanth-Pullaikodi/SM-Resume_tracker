@@ -599,6 +599,17 @@ function addInterview(data) {
   logAudit_(me.email, 'addInterview', { id: id, candidate: data.CandidateID });
   return { ok: true, InterviewID: id };
 }
+// Email the (editable) interview invitation to the candidate.
+function sendInterviewEmail(data) {
+  var me = authorizeUser_(['Admin', 'HR']);
+  if (!data || !data.to || !validEmail_(data.to)) throw new Error('A valid candidate email is required.');
+  var body = String(data.body == null ? '' : data.body);
+  if (!body.trim()) throw new Error('Message is empty.');
+  var subject = String(data.subject || 'Interview Invitation — SandalMist Resort');
+  MailApp.sendEmail({ to: data.to, subject: subject, body: body, name: me.name || 'SandalMist Recruitment' });
+  logAudit_(me.email, 'sendInterviewEmail', { to: data.to, candidate: data.candidateId || '' });
+  return { ok: true };
+}
 function updateInterviewFeedback(data) {
   var me = authorizeUser_(['Admin', 'HR', 'Interviewer']);
   if (!data || !data.InterviewID) throw new Error('InterviewID required.');
